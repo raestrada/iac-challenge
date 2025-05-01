@@ -1,0 +1,103 @@
+# OpenTofu / Terraform ignores
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+*.terraform.lock.hcl
+.terraform.lock.hcl
+
+# Local OpenTofu directories
+.tofu/
+**/.tofu/*
+
+# Ignore Tofu Controller generated files
+**/generated/
+
+# Spring Boot ignores
+HELP.md
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+*.code-workspace
+
+### Gradle ###
+.gradle
+**/build/
+!src/**/build/
+gradle-app.setting
+!gradle-wrapper.jar
+.gradletasknamecache
+gradle/wrapper/gradle-wrapper.properties
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Docker
+.docker/
+
+# Kubernetes
+kubeconfig
+**/kustomize/**/resources/**
+
+# Secrets
+**/secrets/**
+**/*.pem
+**/*.key
+**/*.p12
+**/*.jks
+**/credentials.json
+**/*-credentials.json
+**/application-local.yml
+**/application-local.properties
+
+# OS specific
+.DS_Store
+Thumbs.db
