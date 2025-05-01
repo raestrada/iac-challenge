@@ -21,6 +21,8 @@ includes:
       VELA_VERSION: '{{.VELA_VERSION}}'
   tofu:
     taskfile: ./scripts/setup/Taskfile.tofu-controller.yml
+  gcp:
+    taskfile: ./scripts/setup/Taskfile.gcp-credentials.yml
 
 tasks:
   install-task:
@@ -64,6 +66,7 @@ tasks:
     desc: Bootstrap the entire environment
     deps: [install-task]
     cmds:
+      - task: setup-env
       - task: microk8s:install
       - task: microk8s:setup
       - task: install-tools
@@ -87,6 +90,7 @@ tasks:
       - task: flux:status
       - task: kubevela:status
       - task: tofu:status
+      - echo "To check GCP resources status, run: task gcp-status"
     silent: false
 
   access-ui:
@@ -97,6 +101,15 @@ tasks:
 
   bootstrap-gitops:
     desc: Bootstrap Flux with GitOps repository
+    deps: [install-k8s-components]
+    cmds:
+      - task: gcp:create-secret
+      - task: gcp:apply-git-repository
+      - echo "GitOps repository configured successfully. Flux will now synchronize with the Git repository."
+    silent: false
+
+  bootstrap-flux-gitops:
+    desc: Bootstrap Flux with GitOps repository (using flux bootstrap command)
     cmds:
       - task: flux:bootstrap
     silent: false

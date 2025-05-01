@@ -1,0 +1,24 @@
+version: '3'
+
+tasks:
+  default:
+    desc: Check status of GCP resources and Git repository
+    cmds:
+      - |
+        echo "Checking GCP credentials secret..."
+        kubectl get secret gcp-credentials -n flux-system -o yaml | grep -v "credentials.json:" || \
+        echo "GCP credentials not found. Please run 'task gcp:create-secret' to create them."
+        
+        echo ""
+        echo "Checking Git repository configuration..."
+        kubectl get gitrepository terraform-gcp -n flux-system || \
+        echo "Git repository not found. Please run 'task gcp:apply-git-repository' to create it."
+        
+        echo ""
+        echo "Checking for Terraform resources managed by Tofu-Controller..."
+        kubectl get terraforms -A || echo "No Terraform resources found yet."
+        
+        echo ""
+        echo "Current status of the GitRepository sync:"
+        kubectl get gitrepository terraform-gcp -n flux-system -o jsonpath='{.status.conditions}' 2>/dev/null | jq . || echo "Git repository not synced yet."
+    silent: false
