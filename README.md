@@ -2,10 +2,16 @@
 
 ## Overview
 
-This project implements a modern infrastructure and application deployment approach using Kubernetes as a control plane with KubeVela and Tofu-Controller. It follows the architecture detailed in the article [Building a Highly Flexible Control Plane with Kubevela and Tofu-Controller: A Step-by-Step Guide](https://medium.com/@rodrigo.estrada/building-a-highly-flexible-control-plane-with-kubevela-and-tofu-controller-a-step-by-step-guide-61844cf3bc40) to deploy a Spring Boot microservice with PostgreSQL database.
+This project implements a modern infrastructure and application deployment approach using Kubernetes as a control plane with KubeVela and Tofu-Controller. It follows the architecture detailed in the article [Building a Highly Flexible Control Plane with Kubevela and Tofu-Controller: A Step-by-Step Guide](https://medium.com/@rodrigo.estrada/building-a-highly-flexible-control-plane-with-kubevela-and-tofu-controller-a-step-by-step-guide-61844cf3bc40) to deploy a Spring Boot microservice with PostgreSQL database on Google Cloud Platform (GCP).
 
-> **⚠️ WARNING**  
-> This solution is designed to run fully locally and has been developed and tested specifically on Ubuntu. While the concepts may work on other Linux distributions or operating systems, the installation scripts and commands are optimized for Ubuntu environments.
+> **⚠️ IMPORTANT ARCHITECTURE NOTE**  
+> This solution implements a **control plane architecture**, where:
+> 1. The control plane itself (MicroK8s cluster with KubeVela and Tofu-Controller) can be deployed anywhere - in this implementation, it's set up locally on Ubuntu for demonstration purposes
+> 2. The actual resources (PostgreSQL database, Spring Boot app) are deployed to GCP by the control plane
+>
+> In production environments, the control plane would typically have its own dedicated infrastructure and separate account from the target resources for security and governance reasons.
+>
+> **Local Testing Note**: The installation scripts for the control plane are optimized for Ubuntu environments.
 
 ## Why a Kubernetes Control Plane Approach?
 
@@ -42,6 +48,8 @@ Using Tofu-Controller within Kubernetes solves these problems by:
 3. **Secret Management**: Credentials and sensitive data are managed through Kubernetes secrets.
 
 4. **Resource Dependencies**: Define relationships between infrastructure components and applications through Kubernetes.
+
+5. **Multi-Cloud/Environment Management**: The control plane can manage resources in different environments (GCP, AWS, on-prem) from a single place.
 
 ## Modern and Maintainable Architecture
 
