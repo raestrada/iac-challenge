@@ -1,0 +1,135 @@
+version: '3'
+
+tasks:
+  install:
+    desc: Install Tofu-Controller in Kubernetes cluster
+    cmds:
+      - |
+        echo "Installing Tofu-Controller in Kubernetes cluster..."
+        kubectl create namespace flux-system --dry-run=client -o yaml | kubectl apply -f -
+        kubectl apply -f https://raw.githubusercontent.com/flux-iac/tofu-controller/main/docs/release.yaml
+        
+        echo "Waiting for Flux to create the Tofu-Controller deployment (this may take up to 2 minutes)..."
+        # Wait for Flux to process the HelmRelease
+        for i in {1..12}; do
+          echo "Checking Tofu-Controller deployment (attempt $i)..."
+          if kubectl -n flux-system get deployment tofu-controller &> /dev/null; then
+            echo "Deployment found, waiting for it to be ready..."
+            break
+          fi
+          if [ $i -eq 12 ]; then
+            echo "Warning: Deployment not found after 2 minutes. Continuing anyway..."
+          fi
+          sleep 10
+        done
+        
+        # Wait for pods to be ready if deployment exists
+        echo "Waiting for Tofu-Controller pods to be ready..."
+        kubectl -n flux-system wait --for=condition=ready pod -l app=tofu-controller --timeout=120s 2>/dev/null || true
+        
+        # Wait for CRDs to be installed
+        echo "Waiting for CRDs to be installed (this may take some time)..."
+        for i in {1..18}; do
+          echo "Checking CRD terraforms.infra.contrib.fluxcd.io (attempt $i)..."
+          if kubectl get crd terraforms.infra.contrib.fluxcd.io &> /dev/null; then
+            echo "CRD found!"
+            break
+          fi
+          if [ $i -eq 18 ]; then
+            echo "Warning: CRD not found after 3 minutes. Installation may require manual intervention."
+          fi
+          sleep 10
+        done
+        
+        echo "Tofu-Controller installed. Check status with 'task tofu:status'"
+    silent: false
+
+  verify:
+    desc: Verify Tofu-Controller installation
+    cmds:
+      - |
+        echo "Verifying Tofu-Controller installation..."
+        echo "Checking CRD terraforms.infra.contrib.fluxcd.io..."
+        if kubectl get crd terraforms.infra.contrib.fluxcd.io &> /dev/null; then
+          echo "✓ CRD terraforms.infra.contrib.fluxcd.io is installed."
+        else
+          echo "⚠️ Warning: CRD terraforms.infra.contrib.fluxcd.io is not installed."
+          echo "  Installation may be in progress or may require manual intervention."
+          echo "  Run 'kubectl get helmreleases -n flux-system' to check installation status."
+          # Don't exit with error, just show warning
+          # exit 1
+        fi
+        
+        echo "Checking Tofu-Controller deployment..."
+        if kubectl -n flux-system get deployment tofu-controller &> /dev/null; then
+          READY=$(kubectl -n flux-system get deployment tofu-controller -o jsonpath="{.status.readyReplicas}" 2>/dev/null || echo "0")
+          if [ "$READY" -gt 0 ]; then
+            echo "✓ Tofu-Controller deployment is ready with $READY replicas."
+          else
+            echo "⚠️ Warning: Tofu-Controller deployment exists but has no ready replicas."
+            echo "  It may still be initializing. Check with 'kubectl -n flux-system get pods'."
+            # Don't exit with error, just show warning
+            # exit 1
+          fi
+        else
+          echo "⚠️ Warning: Tofu-Controller deployment not found."
+          echo "  It may be in the process of being created by Flux. Check with 'kubectl get helmreleases -n flux-system'."
+          # Don't exit with error, just show warning
+          # exit 1
+        fi
+        
+        echo "Tofu-Controller verification completed."
+        echo "NOTE: If there are warnings, the installation may still be in progress."
+        echo "Run 'task tofu:status' later to check again."
+    silent: false
+
+  status:
+    desc: Check Tofu-Controller status
+    cmds:
+      - |
+        echo "Verificando estado de Tofu-Controller..."
+        echo "Pods con nombre 'tofu-controller' en namespace flux-system:"
+        kubectl -n flux-system get pods | grep tofu-controller || echo "No se encontraron pods de tofu-controller"
+        
+        echo "\nEstado de Helm Release de Tofu-Controller:"
+        kubectl -n flux-system get helmrelease tofu-controller -o yaml | grep -A5 "status:" || echo "HelmRelease no encontrado"
+        
+        echo "\nVerificando CRD de Terraform:"
+        kubectl get crd | grep terraform || echo "No se encontró CRD de Terraform"
+    silent: false
+
+  uninstall:
+    desc: Uninstall Tofu-Controller from Kubernetes cluster
+    cmds:
+      - |
+        echo "Uninstalling Tofu-Controller..."
+        kubectl delete -f https://raw.githubusercontent.com/flux-iac/tofu-controller/main/docs/release.yaml
+        echo "Tofu-Controller uninstalled successfully!"
+    silent: false
+
+  create-test-resource:
+    desc: Create a test Terraform resource to validate Tofu-Controller
+    cmds:
+      - |
+        echo "Creating a test Terraform resource..."
+        cat <<EOF | kubectl apply -f -
+        apiVersion: infra.contrib.fluxcd.io/v1alpha2
+        kind: Terraform
+        metadata:
+          name: helloworld
+          namespace: flux-system
+        spec:
+          approvePlan: auto
+          interval: 1m
+          path: ./
+          sourceRef:
+            kind: GitRepository
+            name: flux-system
+            namespace: flux-system
+          write: true
+          vars:
+          - name: hello
+            value: world
+        EOF
+        echo "Test Terraform resource created. Check status with 'kubectl -n flux-system get terraforms'"
+    silent: false

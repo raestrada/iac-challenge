@@ -1,0 +1,121 @@
+version: '3'
+
+vars:
+  MICROK8S_VERSION: 1.28/stable
+
+tasks:
+  install:
+    desc: Install MicroK8s on Ubuntu
+    cmds:
+      - |
+        echo "Installing MicroK8s version {{.MICROK8S_VERSION}}..."
+        sudo snap install microk8s --classic --channel={{.MICROK8S_VERSION}}
+        
+        CURRENT_USER=$(whoami)
+        echo "Adding user $CURRENT_USER to microk8s group..."
+        sudo usermod -a -G microk8s $CURRENT_USER
+        
+        echo "Setting up kube directory permissions..."
+        sudo mkdir -p $HOME/.kube
+        sudo chown -f -R $CURRENT_USER $HOME/.kube
+        
+        # Add /snap/bin to PATH if not already there
+        if [[ ":$PATH:" != *":/snap/bin:"* ]]; then
+          echo "Adding /snap/bin to PATH..."
+          export PATH="$PATH:/snap/bin"
+          echo 'export PATH="$PATH:/snap/bin"' >> $HOME/.bashrc
+          echo 'export PATH="$PATH:/snap/bin"' >> $HOME/.zshrc 2>/dev/null || true
+        fi
+        
+        # Apply group permissions immediately using sudo
+        echo "Applying group permissions immediately (without requiring logout)..."
+        sudo chmod -R ug+rwx /var/snap/microk8s/current/credentials 2>/dev/null || true
+        
+        # Ensure MicroK8s is started
+        echo "Ensuring MicroK8s is started..."
+        sudo microk8s start
+        
+        # Wait for MicroK8s to be fully started
+        echo "Waiting for MicroK8s to start (this may take a minute)..."
+        for i in {1..30}; do
+          if sudo microk8s status | grep -q "microk8s is running"; then
+            echo "MicroK8s is running!"
+            break
+          fi
+          echo "Waiting for MicroK8s to start... attempt $i/30"
+          sleep 2
+        done
+        
+        echo "MicroK8s installed successfully!"
+    silent: false
+
+  setup:
+    desc: Configure MicroK8s after installation
+    cmds:
+      - |
+        CURRENT_USER=$(whoami)
+        
+        echo "Verifying MicroK8s is running..."
+        if ! sudo microk8s status | grep -q "microk8s is running"; then
+          echo "MicroK8s is not running. Starting MicroK8s..."
+          sudo microk8s start
+          
+          echo "Waiting for MicroK8s to be fully initialized..."
+          for i in {1..30}; do
+            if sudo microk8s status | grep -q "microk8s is running"; then
+              echo "MicroK8s is running!"
+              break
+            fi
+            echo "Waiting for MicroK8s to start... attempt $i/30"
+            sleep 2
+          done
+        else
+          echo "MicroK8s is already running."
+        fi
+        
+        echo "Ensure permissions are correctly set..."
+        sudo usermod -a -G microk8s $CURRENT_USER
+        sudo chown -R $CURRENT_USER $HOME/.kube 2>/dev/null || true
+        sudo chmod -R ug+rwx /var/snap/microk8s/current/credentials 2>/dev/null || true
+        
+        echo "Waiting for MicroK8s to be ready..."
+        sudo microk8s status --wait-ready
+        
+        echo "Enabling necessary MicroK8s addons..."
+        sudo microk8s enable dns storage ingress
+        
+        echo "Creating kubectl alias..."
+        sudo snap alias microk8s.kubectl kubectl
+        
+        echo "Generating kubeconfig..."
+        mkdir -p $HOME/.kube
+        sudo microk8s config > $HOME/.kube/config
+        chmod 600 $HOME/.kube/config
+        
+        echo "MicroK8s setup completed successfully!"
+    silent: false
+
+  status:
+    desc: Check MicroK8s status
+    cmds:
+      - microk8s status
+    silent: false
+
+  stop:
+    desc: Stop MicroK8s
+    cmds:
+      - microk8s stop
+    silent: false
+
+  start:
+    desc: Start MicroK8s
+    cmds:
+      - microk8s start
+      - sleep 5
+    silent: false
+
+  reset:
+    desc: Reset MicroK8s (removes all data)
+    cmds:
+      - microk8s reset
+    silent: false

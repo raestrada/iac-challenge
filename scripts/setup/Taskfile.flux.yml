@@ -1,0 +1,94 @@
+version: '3'
+
+vars:
+  FLUX_VERSION: 2.2.3
+  ENV_FILE: '{{.ENV_FILE | default ".env"}}'
+  GITHUB_ORG: ''
+  GITHUB_REPO: ''
+  GITHUB_TOKEN: ''
+
+tasks:
+  load-env:
+    desc: Load environment variables from .env file
+    cmds:
+      - |
+        ENV_FILE="{{.ENV_FILE}}"
+        if [ ! -f "$ENV_FILE" ]; then
+          echo "Error: Environment file $ENV_FILE not found."
+          echo "Please create it based on .env.example template."
+          exit 1
+        fi
+        
+        echo "Loading environment variables from $ENV_FILE..."
+        set -a
+        source "$ENV_FILE"
+        set +a
+        
+        # Check if required variables are set
+        if [ -z "$GITHUB_ORG" ] || [ -z "$GITHUB_REPO" ] || [ -z "$GITHUB_TOKEN" ]; then
+          echo "Error: Required GitHub variables not found in $ENV_FILE."
+          echo "Please ensure GITHUB_ORG, GITHUB_REPO, and GITHUB_TOKEN are defined."
+          exit 1
+        fi
+        
+        echo "Environment variables loaded successfully."
+
+  install-cli:
+    desc: Install Flux CLI
+    cmds:
+      - |
+        if ! command -v flux &> /dev/null; then
+          echo "Installing Flux CLI version {{.FLUX_VERSION}}..."
+          curl -s https://fluxcd.io/install.sh | sudo FLUX_VERSION={{.FLUX_VERSION}} bash
+          echo "Flux CLI installed successfully!"
+        else
+          echo "Flux CLI is already installed, version: $(flux --version)"
+        fi
+    silent: false
+
+  check:
+    desc: Check Flux prerequisites
+    deps: [install-cli]
+    cmds:
+      - flux check --pre
+    silent: false
+
+  install:
+    desc: Install Flux in Kubernetes cluster (local mode)
+    deps: [check]
+    cmds:
+      - |
+        echo "Installing Flux in Kubernetes cluster..."
+        kubectl create namespace flux-system --dry-run=client -o yaml | kubectl apply -f -
+        flux install
+        echo "Flux installed successfully in Kubernetes cluster!"
+    silent: false
+
+  bootstrap:
+    desc: Bootstrap Flux with GitHub repository
+    deps: [check, load-env]
+    cmds:
+      - |
+        # Environment variables should be loaded from the .env file by the load-env task
+        export GITHUB_TOKEN=$GITHUB_TOKEN
+        echo "Bootstrapping Flux with GitHub repository $GITHUB_ORG/$GITHUB_REPO..."
+        flux bootstrap github \
+          --token-auth \
+          --owner=$GITHUB_ORG \
+          --repository=$GITHUB_REPO \
+          --branch=main \
+          --path=clusters/local
+        echo "Flux bootstrapped successfully with GitHub repository!"
+    silent: false
+
+  status:
+    desc: Check Flux system status
+    cmds:
+      - kubectl -n flux-system get pods
+    silent: false
+
+  uninstall:
+    desc: Uninstall Flux from Kubernetes cluster
+    cmds:
+      - flux uninstall --namespace=flux-system --silent
+    silent: false

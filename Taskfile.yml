@@ -1,0 +1,108 @@
+version: '3'
+
+vars:
+  MICROK8S_VERSION: 1.28/stable
+  KUBECTL_VERSION: 1.28.0
+  FLUX_VERSION: 2.2.3
+  VELA_VERSION: v1.9.6
+
+includes:
+  microk8s:
+    taskfile: ./scripts/setup/Taskfile.microk8s.yml
+    vars:
+      MICROK8S_VERSION: '{{.MICROK8S_VERSION}}'
+  flux:
+    taskfile: ./scripts/setup/Taskfile.flux.yml
+    vars:
+      FLUX_VERSION: '{{.FLUX_VERSION}}'
+  kubevela:
+    taskfile: ./scripts/setup/Taskfile.kubevela.yml
+    vars:
+      VELA_VERSION: '{{.VELA_VERSION}}'
+  tofu:
+    taskfile: ./scripts/setup/Taskfile.tofu-controller.yml
+
+tasks:
+  install-task:
+    desc: Install go-task if not already installed
+    cmds:
+      - |
+        if ! command -v task &> /dev/null; then
+          echo "Installing go-task..."
+          sudo sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
+          echo "go-task installed successfully!"
+        else
+          echo "go-task is already installed, version: $(task --version)"
+        fi
+    silent: true
+
+  install-kubectl:
+    desc: Install kubectl CLI
+    cmds:
+      - |
+        if ! command -v kubectl &> /dev/null || [[ "$(kubectl version --client -o json | jq -r '.clientVersion.gitVersion')" != *"{{.KUBECTL_VERSION}}"* ]]; then
+          echo "Installing kubectl version {{.KUBECTL_VERSION}}..."
+          curl -LO "https://dl.k8s.io/release/v{{.KUBECTL_VERSION}}/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+          echo "kubectl installed successfully!"
+        else
+          echo "kubectl version {{.KUBECTL_VERSION}} is already installed."
+        fi
+    silent: false
+
+  install-tools:
+    desc: Install all required CLI tools
+    deps: [install-task]
+    cmds:
+      - task: install-kubectl
+      - task: flux:install-cli
+      - task: kubevela:install-cli
+    silent: false
+
+  bootstrap:
+    desc: Bootstrap the entire environment
+    deps: [install-task]
+    cmds:
+      - task: microk8s:install
+      - task: microk8s:setup
+      - task: install-tools
+      - task: install-k8s-components
+    silent: false
+
+  install-k8s-components:
+    desc: Install Kubernetes components (Flux, KubeVela, Tofu-Controller)
+    cmds:
+      - task: flux:install
+      - task: kubevela:install
+      - task: kubevela:enable-velaux
+      - task: tofu:install
+      - task: tofu:verify
+    silent: false
+
+  status:
+    desc: Check status of all components
+    cmds:
+      - task: microk8s:status
+      - task: flux:status
+      - task: kubevela:status
+      - task: tofu:status
+    silent: false
+
+  access-ui:
+    desc: Access KubeVela UI
+    cmds:
+      - task: kubevela:access-ui
+    silent: false
+
+  bootstrap-gitops:
+    desc: Bootstrap Flux with GitOps repository
+    cmds:
+      - task: flux:bootstrap
+    silent: false
+
+  all:
+    desc: Install and configure everything
+    cmds:
+      - task: bootstrap
+    silent: false

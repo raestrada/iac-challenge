@@ -1,0 +1,90 @@
+version: '3'
+
+vars:
+  VELA_VERSION: v1.9.6
+
+tasks:
+  install-cli:
+    desc: Install KubeVela CLI
+    cmds:
+      - |
+        if ! command -v vela &> /dev/null; then
+          echo "Installing KubeVela CLI version {{.VELA_VERSION}}..."
+          curl -fsSl https://kubevela.io/script/install.sh | bash -s {{.VELA_VERSION}}
+          echo "KubeVela CLI installed successfully!"
+        else
+          echo "KubeVela CLI is already installed, version: $(vela version)"
+        fi
+    silent: false
+
+  install:
+    desc: Install KubeVela in Kubernetes cluster
+    deps: [install-cli]
+    cmds:
+      - |
+        echo "Installing KubeVela in Kubernetes cluster..."
+        vela install -v {{.VELA_VERSION}}
+        echo "Waiting for KubeVela to be ready..."
+        kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=vela-core -n vela-system --timeout=180s
+        echo "KubeVela installed successfully!"
+    silent: false
+
+  enable-velaux:
+    desc: Enable VelaUX UI component
+    deps: [install]
+    cmds:
+      - |
+        echo "Enabling VelaUX component..."
+        vela addon enable velaux
+        echo "Waiting for VelaUX to be ready..."
+        
+        # Wait a moment for the pods to start being created
+        sleep 10
+        
+        # Check what label the VelaUX pods actually use
+        echo "Checking pods in the vela-system namespace..."
+        kubectl get pods -n vela-system -o wide
+        
+        # Wait for any pod containing 'velaux' in its name
+        echo "Waiting for VelaUX pods to be ready..."
+        kubectl wait --for=condition=ready pod -n vela-system -l "app=velaux" --timeout=180s || \
+        kubectl wait --for=condition=ready pod -n vela-system -l "app.kubernetes.io/component=velaux" --timeout=180s || \
+        kubectl wait --for=condition=ready pod -n vela-system --selector "addon.oam.dev/name=velaux" --timeout=180s || \
+        kubectl wait --for=condition=ready pod -n vela-system --field-selector "metadata.name=~velaux.*" --timeout=180s || true
+        
+        # Verificar si VelaUX está funcionando independientemente del resultado anterior
+        if kubectl get pods -n vela-system | grep -q velaux; then
+          echo "VelaUX está instalado en el clúster."
+          echo "VelaUX enabled successfully!"
+        else
+          echo "Advertencia: No se encontraron pods de VelaUX. La instalación puede haber fallado."
+          exit 1
+        fi
+    silent: false
+
+  access-ui:
+    desc: Access VelaUX UI (port-forward)
+    cmds:
+      - |
+        echo "Starting port-forward to access VelaUX UI..."
+        echo "VelaUX will be accessible at: http://localhost:8080"
+        echo "Default credentials: admin / VelaUX12345"
+        echo "Press Ctrl+C to stop port-forwarding"
+        vela port-forward addon-velaux -n vela-system
+    silent: false
+
+  status:
+    desc: Check KubeVela status
+    cmds:
+      - kubectl -n vela-system get pods
+      - vela status
+    silent: false
+
+  uninstall:
+    desc: Uninstall KubeVela from Kubernetes cluster
+    cmds:
+      - |
+        echo "Uninstalling KubeVela..."
+        vela uninstall
+        echo "KubeVela uninstalled successfully!"
+    silent: false

@@ -4,6 +4,9 @@
 
 This project implements a modern infrastructure and application deployment approach using Kubernetes as a control plane with KubeVela and Tofu-Controller. It follows the architecture detailed in the article [Building a Highly Flexible Control Plane with Kubevela and Tofu-Controller: A Step-by-Step Guide](https://medium.com/@rodrigo.estrada/building-a-highly-flexible-control-plane-with-kubevela-and-tofu-controller-a-step-by-step-guide-61844cf3bc40) to deploy a Spring Boot microservice with PostgreSQL database.
 
+> **⚠️ WARNING**  
+> This solution is designed to run fully locally and has been developed and tested specifically on Ubuntu. While the concepts may work on other Linux distributions or operating systems, the installation scripts and commands are optimized for Ubuntu environments.
+
 ## Why a Kubernetes Control Plane Approach?
 
 ### The Power of Post-API Solutions
@@ -75,4 +78,71 @@ Developers can self-serve infrastructure needs without understanding the underly
 
 ## Getting Started
 
-See the documentation in the `docs` directory for detailed installation and usage instructions.# iac-challenge
+This project uses [go-task](https://taskfile.dev/) for automation. Follow these steps to set up your environment.
+
+### Prerequisites
+
+- Ubuntu OS (tested on Ubuntu 20.04 LTS and newer)
+- Sudo access
+- Internet connection
+
+### Installation Steps
+
+1. **Install go-task**
+
+   ```bash
+   sudo sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
+   ```
+
+2. **List available tasks**
+
+   ```bash
+   task -l
+   ```
+
+3. **Bootstrap the environment**
+
+   Complete setup (installs everything in one step):
+   ```bash
+   task bootstrap
+   ```
+   
+   This will install and configure MicroK8s, add the required paths to your environment, and install all necessary components (Flux, KubeVela, and Tofu-Controller).
+
+### Available Tasks
+
+#### Main Tasks
+
+- `task bootstrap` - Complete installation (all components)
+- `task install-k8s-components` - Install all Kubernetes components
+- `task status` - Check status of all components
+- `task access-ui` - Access KubeVela UI
+
+#### Component-Specific Tasks
+
+- MicroK8s tasks: `task microk8s:install`, `task microk8s:setup`, `task microk8s:status`
+- Flux tasks: `task flux:install-cli`, `task flux:install`, `task flux:status`
+- KubeVela tasks: `task kubevela:install-cli`, `task kubevela:install`, `task kubevela:enable-velaux`
+- Tofu-Controller tasks: `task tofu:install`, `task tofu:verify`, `task tofu:status`
+
+### Testing the Installation
+
+After completing the setup, verify that all components are running correctly:
+
+```bash
+task status
+```
+
+Access the KubeVela UI:
+
+```bash
+task access-ui
+```
+
+This will start a port-forward to the KubeVela UI, making it accessible at http://localhost:8080 (username: admin, password: VelaUX12345).
+
+### Next Steps
+
+After setting up the environment, proceed to creating the Terraform modules and defining the KubeVela components for your Spring Boot application and PostgreSQL database.
+
+For more detailed documentation, see the documentation in the `docs` directory.
