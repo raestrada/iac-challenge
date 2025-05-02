@@ -1,0 +1,63 @@
+# Git
+.git
+.gitignore
+
+# Build files
+target/
+build/
+out/
+.gradle/
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.project
+.settings/
+.classpath
+.factorypath
+
+# Logs
+*.log
+logs/
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Maven specific
+.mvn/timing.properties
+mvnw.cmd
+
+# Test files
+src/test/
+
+# Documentation
+README.md
+LICENSE
+*.md
+
+# Docker files
+Dockerfile*
+docker-compose*
+
+# Local configuration
+**/application-local.properties
+**/application-local.yml
+**/application-dev.properties
+**/application-dev.yml
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Local files
+*.local
+
+# Extra unneeded files
+*.log
+*.gz
+*.zip

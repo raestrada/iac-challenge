@@ -214,6 +214,85 @@ task components:clean-up
 
 For more detailed examples, see the sample applications in the `manifests/applications/` directory.
 
+## GitOps Deployment Flow
+
+This project implements a GitOps deployment workflow using Flux to continuously monitor and apply changes from your Git repository. This approach eliminates the need for manual `kubectl apply` or `vela up` commands, ensuring that your infrastructure and applications are always in sync with your Git repository.
+
+### GitOps Architecture
+
+```
+┌───────────────┐     ┌───────────────┐     ┌───────────────┐     ┌───────────────┐
+│  Git Commit   │────►│  Flux Detects │────►│ KubeVela CRDs │────►│  Resources    │
+│  & Push       │     │  Changes      │     │  Applied      │     │  Provisioned  │
+└───────────────┘     └───────────────┘     └───────────────┘     └───────────────┘
+```
+
+The GitOps workflow is as follows:
+
+1. **Define Resources in Git**:
+   - Infrastructure components (GKE, PostgreSQL) are defined as KubeVela YAML manifests
+   - Application components (Spring Boot services) are defined in the same repository
+   - All configurations are stored in the `deployments/{environment}` directories
+
+2. **Flux Monitors Repository**:
+   - Flux continuously watches the Git repository for changes
+   - When changes are detected, Flux pulls the latest version and applies the changes
+   - Deployment directories: `deployments/staging` and `deployments/production`
+
+3. **Automated Reconciliation**:
+   - Flux applies KubeVela manifests (Application, ComponentDefinition, etc.)
+   - KubeVela controllers process these manifests
+   - Tofu-Controller provisions the actual infrastructure in GCP
+   - Application deployments are created in Kubernetes
+
+4. **No Manual Commands Needed**:
+   - No need to run `vela up` or `kubectl apply` commands
+   - The system automatically detects drift and reconciles state
+   - The Git repository becomes the single source of truth
+
+### Setting Up GitOps Deployments
+
+To configure Flux to monitor your deployment directories:
+
+```bash
+# Configure Flux to monitor staging and production directories
+task setup-flux-deployments
+```
+
+To check the status of your Flux Kustomizations:
+
+```bash
+# View status of Flux GitOps deployments
+task flux-deployments:check-status
+```
+
+### Usage Workflow
+
+1. **Development Workflow**:
+   - Make changes to KubeVela manifests in the `deployments/staging` directory
+   - Commit and push changes to the Git repository
+   - Flux automatically detects and applies changes within 1 minute
+   - Monitor deployment status with `task flux-deployments:check-status`
+
+2. **Production Deployment**:
+   - Once tested in staging, copy or merge manifests to `deployments/production`
+   - Commit and push changes to the Git repository
+   - Flux automatically applies changes to the production environment
+   - Production deployment happens without manual intervention
+
+3. **Rollback Process**:
+   - To rollback, revert the commit in the Git repository
+   - Flux automatically detects the change and reverts the deployment
+   - The system returns to the previous known-good state
+
+### Benefits of This Approach
+
+- **Consistency**: All environments are deployed using the same method
+- **Auditability**: Git history provides a complete audit trail of all changes
+- **Automation**: Reduced human error through automated deployment process
+- **Self-documenting**: The Git repository serves as documentation of your infrastructure
+- **Simplified Operations**: Operators focus on Git operations instead of complex deployment commands
+
 ## Getting Started
 
 This project uses [go-task](https://taskfile.dev/) for automation. Follow these steps to set up your environment.
