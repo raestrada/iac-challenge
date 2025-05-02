@@ -1,0 +1,39 @@
+---
+extends: default
+
+rules:
+  # 80 chars should be enough, but don't fail if a line is longer
+  line-length:
+    max: 120
+    level: warning
+
+  # Accept both formats: key: value and key:value
+  colons:
+    max-spaces-before: 0
+    max-spaces-after: 1
+
+  # KubeVela manifests can have very deep mapping
+  indentation:
+    spaces: 2
+    indent-sequences: consistent
+
+  # Don't fail on missing document start (---)
+  document-start:
+    present: false
+    level: warning
+    
+  # Allow empty lines to separate logical sections
+  empty-lines:
+    max: 2
+    max-start: 0
+    max-end: 0
+
+  # Require consistent truthy values (true, false) not (True, False, yes, no)
+  truthy:
+    allowed-values: ['true', 'false']
+    level: warning
+    
+  # Don't force comments to start with a space
+  comments:
+    min-spaces-from-content: 1
+    level: warning

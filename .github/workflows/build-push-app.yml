@@ -1,0 +1,94 @@
+name: Build and Push Spring Boot App Image
+
+# Only run this workflow after security checks have passed
+on:
+  workflow_run:
+    workflows: ["App Security Scanning"]
+    types:
+      - completed
+    branches: [main]
+  workflow_dispatch: # Allow manual triggering
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCR_REPOSITORY: gcr.io/${{ secrets.GCP_PROJECT_ID }}
+  IMAGE_NAME: spring-person-api
+  
+jobs:
+  build-and-push:
+    name: Build and Push to GCR
+    runs-on: ubuntu-latest
+    
+    # Only run if security checks have passed and it's a push to main or a manually triggered workflow
+    if: |
+      (github.event_name == 'workflow_dispatch') || 
+      (github.event_name == 'workflow_run' && 
+       github.event.workflow_run.conclusion == 'success' && 
+       github.event.workflow_run.head_branch == 'main')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        
+      - name: Check security status
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            echo "⚠️ This workflow ran because the App Security Scanning workflow passed"
+            echo "   Security scan conclusion: ${{ github.event.workflow_run.conclusion }}"
+            echo "   Source branch: ${{ github.event.workflow_run.head_branch }}"
+          else
+            echo "⚠️ This workflow was manually triggered - security scans may not have run"
+          fi
+      
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+      
+      - name: Build application with Maven
+        working-directory: ./app-example
+        run: ./mvnw clean package -DskipTests
+      
+      - name: Setup Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          export_default_credentials: true
+      
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker gcr.io
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      - name: Get short SHA
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+      
+      - name: Get timestamp
+        id: timestamp
+        run: echo "timestamp=$(date +'%Y%m%d%H%M%S')" >> $GITHUB_OUTPUT
+      
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./app-example
+          push: true
+          tags: |
+            ${{ env.GCR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.GCR_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.sha_short }}
+            ${{ env.GCR_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ steps.timestamp.outputs.timestamp }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Image digest
+        run: echo ${{ steps.build-push.outputs.digest }}
+      
+      - name: Notify build complete
+        if: success()
+        run: |
+          echo "✅ Successfully built and pushed image: ${{ env.GCR_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.sha_short }}"
+          echo "📝 You can use this image reference in your Kubernetes manifests"

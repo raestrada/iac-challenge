@@ -1,0 +1,99 @@
+name: Terraform CI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'tf-controller/**'
+      - '.github/workflows/terraform-ci.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'tf-controller/**'
+      - '.github/workflows/terraform-ci.yml'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  terraform-ci:
+    name: Terraform CI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./tf-controller
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.7  # Specify the version you want to use
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }} # Optional: for Terraform Cloud
+      
+      - name: Install tflint
+        run: |
+          curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+      
+      - name: Terraform Format Check
+        id: fmt
+        run: terraform fmt -check -recursive
+        continue-on-error: true
+      
+      - name: Terraform Init
+        id: init
+        run: terraform init -backend=false
+      
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate
+      
+      - name: TFLint
+        id: tflint
+        run: tflint --recursive
+      
+      - name: Setup Infracost
+        uses: infracost/actions/setup@v2
+        with:
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
+      
+      - name: Generate Infracost cost estimate
+        run: |
+          # Generate Infracost JSON file with cost estimate
+          infracost breakdown --path . \
+                           --format json \
+                           --out-file infracost.json
+        continue-on-error: true
+      
+      - name: Post Infracost comment
+        if: github.event_name == 'pull_request' && steps.infracost.outcome == 'success'
+        run: |
+          # Post Infracost comment
+          infracost comment github --path infracost.json \
+                                  --repo $GITHUB_REPOSITORY \
+                                  --github-token ${{ secrets.GITHUB_TOKEN }} \
+                                  --pull-request ${{ github.event.pull_request.number }} \
+                                  --behavior update
+        continue-on-error: true
+      
+      - name: Security Scan with checkov
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: ./tf-controller
+          framework: terraform
+        continue-on-error: true
+      
+      - name: Summary
+        run: |
+          echo "### Terraform CI Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "| --- | --- |" >> $GITHUB_STEP_SUMMARY
+          echo "| Format | ${{ steps.fmt.outcome == 'success' && '✅ Passed' || '⚠️ Needs Formatting' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Init | ${{ steps.init.outcome == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Validate | ${{ steps.validate.outcome == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| TFLint | ${{ steps.tflint.outcome == 'success' && '✅ Passed' || '⚠️ Issues Found' }} |" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Cost estimation details have been posted as a comment on the PR." >> $GITHUB_STEP_SUMMARY
+          fi

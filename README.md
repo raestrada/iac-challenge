@@ -1,6 +1,8 @@
 # Infrastructure as Code Challenge - Control Plane Architecture with KubeVela and Tofu-Controller
 
 > 📑 **Security & Cost Optimization**: View our detailed analysis on [cloud security and cost optimization strategies](docs/security-cost-optimization.md) for production environments.
+> 
+> 🔧 **CI/CD Workflows**: Explore our [automated CI/CD workflows](docs/ci-cd-workflows.md) for application, infrastructure, and manifest validation.
 
 ![architecture](https://miro.medium.com/v2/resize:fit:1400/0*UF_t_MBXZ-wq0Z3t)
 

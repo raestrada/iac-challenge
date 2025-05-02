@@ -1,0 +1,124 @@
+name: Kubernetes Manifests CI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'manifests/**'
+      - '.github/workflows/k8s-manifests-ci.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'manifests/**'
+      - '.github/workflows/k8s-manifests-ci.yml'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  validate-manifests:
+    name: Validate Kubernetes Manifests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Kubernetes tools
+        run: |
+          # Install yq for YAML processing
+          wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          chmod +x /usr/local/bin/yq
+          
+          # Install kubeconform for manifest validation
+          KUBECONFORM_VERSION=v0.6.3
+          wget -q https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz
+          tar xzf kubeconform-linux-amd64.tar.gz
+          mv kubeconform /usr/local/bin/
+          
+          # Install kube-linter for best practices checking
+          curl -L "https://github.com/stackrox/kube-linter/releases/download/v0.6.4/kube-linter-linux" -o /usr/local/bin/kube-linter
+          chmod +x /usr/local/bin/kube-linter
+        
+      - name: YAML Lint
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          file_or_dir: manifests/
+          config_file: .github/workflows/yamllint.yml
+          strict: false
+        continue-on-error: true
+          
+      - name: Validate KubeVela CRDs with Kubeconform
+        run: |
+          # Download KubeVela OpenAPI schemas
+          mkdir -p schemas
+          # Get KubeVela CRD schemas
+          curl -sL https://raw.githubusercontent.com/kubevela/kubevela/master/charts/vela-core/crds/core.oam.dev_applications.yaml > schemas/application.yaml
+          curl -sL https://raw.githubusercontent.com/kubevela/kubevela/master/charts/vela-core/crds/core.oam.dev_componentdefinitions.yaml > schemas/componentdefinition.yaml
+          curl -sL https://raw.githubusercontent.com/kubevela/kubevela/master/charts/vela-core/crds/core.oam.dev_traitdefinitions.yaml > schemas/traitdefinition.yaml
+          
+          # Validate manifests
+          find manifests -type f -name "*.yaml" -o -name "*.yml" | xargs kubeconform \
+            -schema-location default \
+            -schema-location 'schemas/{{ .ResourceKind | lower }}.yaml' \
+            -kubernetes-version 1.25.0 \
+            -summary \
+            -output json | tee validation.json
+        continue-on-error: true
+          
+      - name: Run Kube-linter
+        run: |
+          echo "Running kube-linter to check for best practices..."
+          kube-linter lint manifests/ --format=json > lint-results.json
+        continue-on-error: true
+      
+      - name: Check for Flux compatibility
+        run: |
+          echo "Checking Flux Kustomization manifests..."
+          # Get all Kustomization files
+          KUSTOMIZATIONS=$(find manifests -type f -name "*.yaml" -o -name "*.yml" | xargs grep -l "kind: Kustomization")
+          
+          # Check for required fields
+          for kust in $KUSTOMIZATIONS; do
+            echo "Checking $kust"
+            # Verify spec.path exists
+            if ! yq '.spec.path' "$kust" | grep -q null; then
+              echo "✅ Path field found in $kust"
+            else
+              echo "❌ Missing path field in $kust"
+            fi
+            
+            # Verify spec.sourceRef exists
+            if ! yq '.spec.sourceRef' "$kust" | grep -q null; then
+              echo "✅ SourceRef field found in $kust"
+            else
+              echo "❌ Missing sourceRef field in $kust"
+            fi
+          done
+        continue-on-error: true
+        
+      - name: Generate summary
+        run: |
+          echo "### Kubernetes Manifests Validation Results" >> $GITHUB_STEP_SUMMARY
+          
+          # YAML Lint results
+          echo "#### YAML Lint" >> $GITHUB_STEP_SUMMARY
+          echo "YAML syntax check completed." >> $GITHUB_STEP_SUMMARY
+          
+          # Kubeconform results
+          echo "#### Manifest Validation" >> $GITHUB_STEP_SUMMARY
+          if [ -f validation.json ]; then
+            VALID_COUNT=$(grep -c "\"status\":\"valid\"" validation.json || echo "0")
+            INVALID_COUNT=$(grep -c "\"status\":\"invalid\"" validation.json || echo "0")
+            echo "- ✅ Valid manifests: $VALID_COUNT" >> $GITHUB_STEP_SUMMARY
+            echo "- ❌ Invalid manifests: $INVALID_COUNT" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No validation results found." >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Kube-linter results
+          echo "#### Best Practices Check" >> $GITHUB_STEP_SUMMARY
+          if [ -f lint-results.json ]; then
+            ISSUE_COUNT=$(grep -c "\"diagnostics\":" lint-results.json || echo "0")
+            echo "- Found $ISSUE_COUNT potential issues to review." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No linting results found." >> $GITHUB_STEP_SUMMARY
+          fi
