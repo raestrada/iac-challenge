@@ -25,6 +25,8 @@ includes:
     taskfile: ./scripts/setup/Taskfile.gcp-credentials.yml
   components:
     taskfile: ./scripts/setup/Taskfile.components.yml
+  flux-deployments:
+    taskfile: ./scripts/setup/Taskfile.flux-deployments.yml
 
 tasks:
   install-task:
@@ -112,11 +114,24 @@ tasks:
     silent: false
     
   setup-gcp-gitops:
-    desc: Setup GCP credentials and Git repository without reinstalling K8s components
+    desc: Set up GitOps connection to GCP terraform repository
     cmds:
-      - task: gcp:create-secret
+      - task: gcp:apply-gcp-credentials
+      - task: gcp:apply-github-secret
       - task: gcp:apply-git-repository
-      - echo "GitOps repository configured successfully without reinstalling components."
+    silent: false
+
+  setup-flux-deployments:
+    desc: Configure Flux to monitor staging and production deployment directories
+    deps: [bootstrap-flux-gitops]
+    cmds:
+      - task: flux-deployments:apply-kustomizations
+      - |
+        echo "\nDeployment directories are now being monitored by Flux:"
+        echo "  - deployments/staging"
+        echo "  - deployments/production"
+        echo "\nTo check the status of the Kustomizations:"
+        echo "  task flux-deployments:check-status"
     silent: false
 
   bootstrap-flux-gitops:

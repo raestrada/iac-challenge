@@ -69,15 +69,31 @@ tasks:
     deps: [check, load-env]
     cmds:
       - |
-        # Environment variables should be loaded from the .env file by the load-env task
-        export GITHUB_TOKEN=$GITHUB_TOKEN
-        echo "Bootstrapping Flux with GitHub repository $GITHUB_ORG/$GITHUB_REPO..."
+        # Explicitly source the .env file again to ensure variables are available
+        if [ -f ".env" ]; then
+          set -a
+          source .env
+          set +a
+        fi
+        
+        # Verify token is available
+        if [ -z "$GITHUB_TOKEN" ]; then
+          echo "Error: GITHUB_TOKEN environment variable is not set or empty"
+          echo "Please check your .env file"
+          exit 1
+        fi
+        
+        echo "Bootstrapping Flux with GitHub repository $GITHUB_ORG/$GITHUB_REPO using token..."
+        
+        # Pass token explicitly to avoid prompt
         flux bootstrap github \
           --token-auth \
           --owner=$GITHUB_ORG \
           --repository=$GITHUB_REPO \
           --branch=main \
-          --path=clusters/local
+          --path=clusters/local \
+          --token=$GITHUB_TOKEN
+        
         echo "Flux bootstrapped successfully with GitHub repository!"
     silent: false
 

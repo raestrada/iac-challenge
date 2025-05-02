@@ -1,0 +1,57 @@
+version: '3'
+
+tasks:
+  apply-kustomizations:
+    desc: Apply Flux Kustomization manifests for staging and production environments
+    cmds:
+      - |
+        echo "Setting up Flux to monitor staging and production deployment directories..."
+        
+        # Check if flux-system namespace exists
+        if ! kubectl get namespace flux-system &> /dev/null; then
+          echo "Error: flux-system namespace not found. Please make sure Flux is properly installed."
+          echo "Run 'task flux:install' first."
+          exit 1
+        fi
+        
+        # Check if the GitRepository exists
+        if ! kubectl get gitrepository flux-system -n flux-system &> /dev/null; then
+          echo "Error: GitRepository 'flux-system' not found in flux-system namespace."
+          echo "Make sure Flux was bootstrapped correctly with 'task bootstrap-flux-gitops'"
+          exit 1
+        fi
+        
+        # Apply the Kustomization manifests
+        echo "Applying Flux Kustomization for staging environment..."
+        kubectl apply -f manifests/flux/staging-kustomization.yaml
+        
+        echo "Applying Flux Kustomization for production environment..."
+        kubectl apply -f manifests/flux/production-kustomization.yaml
+        
+        # Verify the Kustomizations were created
+        echo "Verifying Kustomizations..."
+        kubectl get kustomization -n flux-system
+        
+        echo "Flux is now configured to monitor:"
+        echo "  - deployments/staging    (reconciles every minute)"
+        echo "  - deployments/production (reconciles every minute)"
+        echo ""
+        echo "To use this GitOps setup:"
+        echo "1. Add your KubeVela component definitions to the appropriate directory"
+        echo "2. Commit and push the changes to the Git repository"
+        echo "3. Flux will automatically apply the changes within one minute"
+    silent: false
+    
+  check-status:
+    desc: Check status of Flux Kustomizations for deployments
+    cmds:
+      - |
+        echo "Checking status of Flux Kustomizations for deployments..."
+        
+        kubectl get kustomization -n flux-system staging-apps production-apps -o wide
+        
+        echo ""
+        echo "For detailed status of a specific kustomization, use:"
+        echo "kubectl describe kustomization -n flux-system staging-apps"
+        echo "kubectl describe kustomization -n flux-system production-apps"
+    silent: false
