@@ -1,0 +1,23 @@
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: postgres-app
+  namespace: default
+spec:
+  components:
+    - name: postgres-db
+      type: terraform-postgresql
+      properties:
+        name: iac-challenge-postgres
+        size: small
+        project_id: "${GCP_PROJECT_ID}"
+        region: "${GCP_REGION}"
+      traits:
+        - type: service-binding
+          properties:
+            envMappings:
+              DB_HOST: "host"
+              DB_PORT: "port"
+              DB_NAME: "database"
+              DB_USER: "username"
+              DB_PASSWORD: "password"

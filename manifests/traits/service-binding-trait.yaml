@@ -1,0 +1,58 @@
+apiVersion: core.oam.dev/v1beta1
+kind: TraitDefinition
+metadata:
+  name: service-binding
+  namespace: vela-system
+  annotations:
+    definition.oam.dev/description: "Bind connection info from a service as environment variables into a component"
+spec:
+  appliesToWorkloads:
+    - deployments.apps
+    - statefulsets.apps
+    - daemonsets.apps
+    - '*'
+  podDisruptive: true
+  schematic:
+    cue:
+      template: |
+        parameter: {
+          envMappings: [string]: string
+        }
+
+        // Define variables
+        secret: context.outputs.secret
+        if parameter.secret != _|_ {
+          secret: parameter.secret
+        }
+
+        // Define patches
+        patches: {
+          // Add environment variables from the referenced secret
+          spec: {
+            template: {
+              spec: {
+                containers: [{
+                  env: [
+                    for k, v in parameter.envMappings {
+                      name: k
+                      valueFrom: {
+                        secretKeyRef: {
+                          name: secret.metadata.name
+                          key: v
+                        }
+                      }
+                    },
+                  ]
+                }]
+              }
+            }
+          }
+        }
+
+        // Define the outputs
+        outputs: {
+          // The referenced secret
+          if secret != _|_ {
+            secret: secret
+          }
+        }

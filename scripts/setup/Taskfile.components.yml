@@ -1,0 +1,210 @@
+version: '3'
+
+tasks:
+  load-env:
+    desc: Load environment variables
+    cmds:
+      - |
+        if [ ! -f .env ]; then
+          echo "Error: .env file not found. Please create it based on .env.example"
+          exit 1
+        fi
+        
+        # Export all environment variables to make them available
+        set -a
+        source .env
+        set +a
+        
+        echo "Environment variables loaded successfully"
+    silent: false
+
+  install-components:
+    desc: Install KubeVela component definitions
+    deps: [load-env]
+    cmds:
+      - |
+        echo "Installing KubeVela component definitions..."
+        
+        # Create the provider first
+        kubectl apply -f manifests/components/gcp-provider.yaml
+        
+        # Install the component definitions
+        kubectl apply -f manifests/components/postgresql-component.yaml
+        kubectl apply -f manifests/components/gke-component.yaml
+        
+        # Install the trait definitions
+        kubectl apply -f manifests/traits/service-binding-trait.yaml
+        
+        echo "Waiting for component definitions to be ready..."
+        sleep 5
+        
+        echo "Verifying component installations..."
+        kubectl get componentdefinition -n vela-system terraform-postgresql
+        kubectl get componentdefinition -n vela-system terraform-gke
+        kubectl get traitdefinition -n vela-system service-binding
+        
+        echo "KubeVela component definitions installed successfully"
+    silent: false
+
+  deploy-gke:
+    desc: Deploy the shared GKE cluster
+    deps: [install-components]
+    cmds:
+      - |
+        echo "Deploying shared GKE cluster..."
+        
+        # Replace environment variables in the application manifest
+        cat manifests/applications/gke-application.yaml | \
+        sed "s/\${GCP_PROJECT_ID}/$GCP_PROJECT_ID/g" | \
+        sed "s/\${GCP_REGION}/$GCP_REGION/g" | \
+        kubectl apply -f -
+        
+        echo "GKE cluster deployment initiated"
+        echo "Use 'kubectl get application shared-gke-cluster -n default' to check status"
+    silent: false
+
+  deploy-petclinic:
+    desc: Deploy Spring PetClinic application with its PostgreSQL database
+    deps: [install-components]
+    cmds:
+      - |
+        echo "Deploying Spring PetClinic application..."
+        
+        # Replace environment variables in the application manifest
+        cat manifests/applications/spring-petclinic-app.yaml | \
+        sed "s/\${GCP_PROJECT_ID}/$GCP_PROJECT_ID/g" | \
+        sed "s/\${GCP_REGION}/$GCP_REGION/g" | \
+        kubectl apply -f -
+        
+        echo "Spring PetClinic application deployment initiated"
+        echo "This will automatically deploy the PostgreSQL database needed for the application"
+        echo "Use 'kubectl get application spring-petclinic -n default' to check status"
+    silent: false
+
+  deploy-all:
+    desc: Deploy the full infrastructure and application stack
+    deps: [install-components]
+    cmds:
+      - |
+        echo "Deploying the full infrastructure and application stack..."
+        
+        echo "Step 1: Deploying shared GKE cluster..."
+        task components:deploy-gke
+        
+        echo "Step 2: Waiting for GKE cluster to stabilize (30s)..."
+        sleep 30
+        
+        echo "Step 3: Deploying Spring PetClinic application with its database..."
+        task components:deploy-petclinic
+        
+        echo "Full stack deployment initiated"
+        echo "Check status with 'task components:check-status'"
+    silent: false
+
+  check-status:
+    desc: Check status of deployed applications
+    cmds:
+      - |
+        echo "Checking status of infrastructure and applications..."
+        
+        echo "===== APPLICATIONS ====="
+        kubectl get application -A
+        
+        echo "\n===== SHARED INFRASTRUCTURE ====="
+        echo "GKE Cluster Terraform Resource:"
+        kubectl get terraforms -A | grep gke || echo "No GKE resources found"
+        
+        echo "\n===== APPLICATION RESOURCES ====="
+        echo "PostgreSQL Terraform Resources:"
+        kubectl get terraforms -A | grep -i postgres || echo "No PostgreSQL resources found"
+        
+        echo "\nSpring Boot Deployments:"
+        kubectl get deployments -A | grep -i app || echo "No Spring Boot deployments found"
+        
+        echo "\nConnection Secrets:"
+        kubectl get secrets -A | grep conn || echo "No connection secrets found"
+        
+        echo "\nTerraform resources may take 10-15 minutes to provision in GCP."
+        echo "For detailed status of a resource, use: kubectl describe terraform <resource-name> -n <namespace>"
+    silent: false
+
+  get-connection-info:
+    desc: Get connection information for PostgreSQL and application endpoints
+    cmds:
+      - |
+        echo "Getting application connection information..."
+        
+        echo "===== DATABASE CONNECTIONS ====="
+        # Find all database connection secrets
+        DB_SECRETS=$(kubectl get secrets -A --field-selector type=Opaque -o jsonpath='{range .items[*]}{.metadata.namespace}{"\t"}{.metadata.name}{"\n"}{end}' | grep -i conn)
+        
+        if [ -n "$DB_SECRETS" ]; then
+          echo "Found the following database connection secrets:"
+          echo "$DB_SECRETS"
+          echo ""
+          
+          # For each secret found, display its connection info
+          echo "$DB_SECRETS" | while read -r ns secret; do
+            echo "Connection info for $secret in namespace $ns:"
+            if kubectl get secret $secret -n $ns -o jsonpath='{.data.host}' &>/dev/null; then
+              echo "  Database host: $(kubectl get secret $secret -n $ns -o jsonpath='{.data.host}' | base64 -d)"
+              echo "  Database port: $(kubectl get secret $secret -n $ns -o jsonpath='{.data.port}' | base64 -d)"
+              echo "  Database name: $(kubectl get secret $secret -n $ns -o jsonpath='{.data.database}' | base64 -d)"
+              echo "  Database user: $(kubectl get secret $secret -n $ns -o jsonpath='{.data.username}' | base64 -d)"
+              echo "  Password is available but not displayed for security reasons"
+            else
+              echo "  Connection information format not recognized"
+            fi
+            echo ""
+          done
+        else
+          echo "No database connection secrets found."
+          echo "Database resources might still be provisioning. Check status with 'task components:check-status'"
+        fi
+        
+        echo "===== APPLICATION ENDPOINTS ====="
+        kubectl get svc -A | grep -v kubernetes || echo "No services found"
+    silent: false
+
+  clean-up:
+    desc: Remove all deployed applications
+    cmds:
+      - |
+        echo "Removing deployed applications..."
+        
+        read -p "Are you sure you want to remove all applications and infrastructure? This will delete resources in GCP. (y/n)" -n 1 -r
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+          # First remove application resources
+          echo "Removing Spring PetClinic application..."
+          kubectl delete application spring-petclinic -n default --ignore-not-found
+          kubectl delete application postgres-app -n default --ignore-not-found
+          
+          echo "Waiting for application resources to start terminating (15s)..."
+          sleep 15
+          
+          # Then remove shared infrastructure
+          echo "Removing shared GKE cluster..."
+          kubectl delete application shared-gke-cluster -n default --ignore-not-found
+          
+          echo "All resources removal initiated."
+          echo "WARNING: GCP resources (PostgreSQL, GKE) may take up to 15-20 minutes to fully terminate."
+          echo "Check status with: kubectl get terraforms -A"
+        else
+          echo "Cleanup canceled."
+        fi
+    silent: false
+    
+  clean-app-only:
+    desc: Remove just the application, keeping shared infrastructure
+    cmds:
+      - |
+        echo "Removing only the application layer, keeping shared infrastructure..."
+        
+        kubectl delete application spring-petclinic -n default --ignore-not-found
+        kubectl delete application postgres-app -n default --ignore-not-found
+        
+        echo "Application resources removal initiated."
+        echo "The shared GKE cluster will remain running."
+        echo "Check status with: kubectl get terraforms -A"
+    silent: false

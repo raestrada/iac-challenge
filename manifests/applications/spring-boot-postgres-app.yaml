@@ -1,0 +1,76 @@
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: spring-boot-with-postgres
+  namespace: default
+spec:
+  components:
+    # PostgreSQL database component using our Terraform module
+    - name: postgres-db
+      type: terraform-postgresql
+      properties:
+        name: iac-challenge-postgres
+        size: small
+        project_id: "${GCP_PROJECT_ID}"
+        region: "${GCP_REGION}"
+      
+    # Spring Boot application component
+    - name: web-app
+      type: spring-boot-app
+      properties:
+        image: "springio/petclinic:latest"  # Sample Spring Boot pet clinic application
+        port: 8080
+        env:
+          SPRING_PROFILES_ACTIVE: "postgres"
+          SPRING_DATASOURCE_URL: "jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}"
+          SPRING_DATASOURCE_USERNAME: "${DB_USER}"
+          SPRING_DATASOURCE_PASSWORD: "${DB_PASSWORD}"
+          APP_NAME: "${APP_NAME}"
+          APP_VERSION: "${APP_VERSION}"
+      traits:
+        # Connect to the PostgreSQL service
+        - type: service-binding
+          properties:
+            secret: postgres-db-conn
+            envMappings:
+              DB_HOST: "host"
+              DB_PORT: "port"
+              DB_NAME: "database"
+              DB_USER: "username"
+              DB_PASSWORD: "password"
+        
+        # Expose the Spring Boot application
+        - type: expose
+          properties:
+            port: [8080]
+            type: ClusterIP
+  
+  # Define a workflow for orderly deployment
+  workflow:
+    steps:
+      - name: deploy-postgres
+        type: apply-component
+        properties:
+          component: postgres-db
+      
+      - name: check-postgres-ready
+        type: wait
+        properties:
+          continue: true
+          timeout: 600s
+          resources:
+            - apiVersion: infra.contrib.fluxcd.io/v1alpha2
+              kind: Terraform
+              name: postgres-db
+          conditions:
+            - status: running
+              reason: TerraformPlannedCompleted
+        dependsOn:
+          - deploy-postgres
+      
+      - name: deploy-web-app
+        type: apply-component
+        properties:
+          component: web-app
+        dependsOn:
+          - check-postgres-ready

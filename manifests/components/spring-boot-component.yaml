@@ -1,0 +1,88 @@
+apiVersion: core.oam.dev/v1beta1
+kind: ComponentDefinition
+metadata:
+  name: spring-boot-app
+  namespace: vela-system
+  annotations:
+    definition.oam.dev/description: "Spring Boot application component definition"
+spec:
+  workload:
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+  schematic:
+    cue:
+      template: |
+        output: {
+          apiVersion: "apps/v1"
+          kind:       "Deployment"
+          spec: {
+            selector: matchLabels: {
+              "app": context.name
+            }
+            template: {
+              metadata: labels: {
+                "app": context.name
+              }
+              spec: {
+                containers: [{
+                  name:  context.name
+                  image: parameter.image
+                  
+                  if parameter.cmd != _|_ {
+                    command: parameter.cmd
+                  }
+                  
+                  ports: [{
+                    containerPort: parameter.port
+                  }]
+                  
+                  env: [
+                    for k, v in parameter.env {
+                      name: k
+                      value: v
+                    }
+                  ]
+                  
+                  resources: {
+                    requests: {
+                      memory: parameter.requests.memory
+                      cpu: parameter.requests.cpu
+                    }
+                    limits: {
+                      memory: parameter.limits.memory
+                      cpu: parameter.limits.cpu
+                    }
+                  }
+                }]
+              }
+            }
+          }
+        }
+
+        parameter: {
+          image: string
+          port: *8080 | int
+          
+          cmd?: [...string]
+          
+          env: [string]: string
+          
+          requests: {
+            cpu: *"100m" | string
+            memory: *"128Mi" | string
+          }
+          
+          limits: {
+            cpu: *"500m" | string
+            memory: *"512Mi" | string
+          }
+        }
+  status:
+    customStatus: |
+      message: "Ready"
+      if context.output.status.readyReplicas == 0 {
+        message: "Not ready"
+      }
+    healthPolicy: |
+      isHealth: context.output.status.readyReplicas == context.output.status.replicas

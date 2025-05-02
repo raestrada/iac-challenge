@@ -84,6 +84,136 @@ Developers can self-serve infrastructure needs without understanding the underly
 - **PostgreSQL**: Robust, open-source relational database
 - **Google Cloud Platform**: Cloud provider for infrastructure resources
 
+## Components Architecture
+
+This control plane solution follows a layered hierarchical approach, where infrastructure is separated from applications, but applications can easily consume infrastructure through well-defined interfaces.
+
+### Component Hierarchy
+
+The component hierarchy follows a three-level structure:
+
+1. **Infrastructure Layer**: Shared resources (GKE cluster)
+2. **Application Infrastructure Layer**: App-specific infrastructure (PostgreSQL)
+3. **Application Layer**: The actual application (Spring Boot services)
+
+The control plane uses KubeVela's component model to represent these layers:
+
+```
+Infrastructure Layer (Shared)
+└── GKE Cluster
+    ├── Application 1
+    │   ├── PostgreSQL Database
+    │   └── Spring Boot Service
+    │
+    └── Application 2
+        ├── PostgreSQL Database
+        └── Spring Boot Service
+```
+
+### Available Components
+
+The following components are available in this implementation:
+
+#### Infrastructure Components
+- **terraform-gke**: Provisions a minimal GKE cluster in GCP
+  - Implemented as a KubeVela ComponentDefinition that uses Tofu-Controller
+  - Located in `manifests/components/gke-component.yaml`
+
+#### Application Infrastructure Components
+- **terraform-postgresql**: Provisions a dedicated PostgreSQL instance in GCP Cloud SQL
+  - Implemented as a KubeVela ComponentDefinition that uses Tofu-Controller
+  - Located in `manifests/components/postgresql-component.yaml`
+  - Outputs connection information as Kubernetes secrets
+
+#### Application Components
+- **spring-boot-app**: Deploys a Spring Boot application in Kubernetes
+  - Implements common configuration patterns for Spring applications
+  - Located in `manifests/components/spring-boot-component.yaml`
+
+#### High-Level Components
+- **spring-app-with-db**: A composite component that bundles:
+  - PostgreSQL database configuration and provisioning
+  - Spring Boot application with auto-configured database connection
+  - Service binding to connect the application to the database
+  - Sequential workflow for proper deployment ordering
+  - Located in `manifests/components/spring-app-with-db-component.yaml`
+
+#### Supporting Traits
+- **service-binding**: Connects applications to infrastructure by injecting credentials
+  - Located in `manifests/traits/service-binding-trait.yaml`
+  - Used to bind PostgreSQL connection information to Spring Boot apps
+
+### How Components Work Together
+
+#### Separation of Concerns
+
+1. **Infrastructure teams** manage the shared GKE cluster using the `terraform-gke` component
+2. **Platform teams** create high-level components like `spring-app-with-db`
+3. **Application teams** use high-level components, providing only minimal configuration
+
+#### Resource Provisioning Flow
+
+1. The shared GKE cluster is provisioned first using the `gke-application.yaml`
+2. Application teams deploy their applications using `spring-app-with-db` component:
+   - The component automatically provisions a PostgreSQL instance
+   - It configures a Spring Boot application with the correct database connection
+   - It creates a service binding to inject credentials
+
+#### Information Flow
+
+1. Infrastructure components generate outputs (e.g., connection strings, credentials)
+2. These outputs are stored as Kubernetes secrets
+3. Application components consume these secrets through service binding
+4. KubeVela manages dependencies to ensure resources are created in the correct order
+
+### Using the Components
+
+#### Deploying Shared Infrastructure
+
+To deploy the shared GKE cluster:
+
+```bash
+task components:deploy-gke
+```
+
+#### Deploying an Application
+
+To deploy a Spring Boot application with its own PostgreSQL database:
+
+```bash
+task components:deploy-petclinic
+```
+
+#### Deploying the Complete Stack
+
+To deploy both the shared infrastructure and application:
+
+```bash
+task components:deploy-all
+```
+
+#### Checking Status and Connections
+
+```bash
+# View status of all components
+task components:check-status
+
+# Get database connection information
+task components:get-connection-info
+```
+
+#### Cleanup
+
+```bash
+# Remove just application resources
+task components:clean-app-only
+
+# Remove all resources including shared infrastructure
+task components:clean-up
+```
+
+For more detailed examples, see the sample applications in the `manifests/applications/` directory.
+
 ## Getting Started
 
 This project uses [go-task](https://taskfile.dev/) for automation. Follow these steps to set up your environment.

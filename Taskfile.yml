@@ -23,6 +23,8 @@ includes:
     taskfile: ./scripts/setup/Taskfile.tofu-controller.yml
   gcp:
     taskfile: ./scripts/setup/Taskfile.gcp-credentials.yml
+  components:
+    taskfile: ./scripts/setup/Taskfile.components.yml
 
 tasks:
   install-task:

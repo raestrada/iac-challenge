@@ -1,0 +1,163 @@
+apiVersion: core.oam.dev/v1beta1
+kind: ComponentDefinition
+metadata:
+  name: spring-app-with-db
+  namespace: vela-system
+  annotations:
+    definition.oam.dev/description: "High-level Spring Boot application with its own PostgreSQL database"
+spec:
+  workload:
+    definition:
+      apiVersion: core.oam.dev/v1beta1
+      kind: Application
+  schematic:
+    cue:
+      template: |
+        output: {
+          apiVersion: "core.oam.dev/v1beta1"
+          kind:       "Application"
+          metadata: {
+            name: parameter.name
+            namespace: parameter.namespace
+          }
+          spec: {
+            components: [
+              // PostgreSQL database component
+              {
+                name: "\(parameter.name)-db"
+                type: "terraform-postgresql"
+                properties: {
+                  name: parameter.dbConfig.name
+                  size: parameter.dbConfig.size
+                  project_id: parameter.projectId
+                  region: parameter.region
+                }
+              },
+              // Spring Boot application component
+              {
+                name: "\(parameter.name)-app"
+                type: "spring-boot-app"
+                properties: {
+                  image: parameter.image
+                  port: parameter.port
+                  env: {
+                    SPRING_PROFILES_ACTIVE: "postgres"
+                    SPRING_DATASOURCE_URL: "jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}"
+                    SPRING_DATASOURCE_USERNAME: "${DB_USER}"
+                    SPRING_DATASOURCE_PASSWORD: "${DB_PASSWORD}"
+                    APP_NAME: parameter.name
+                    APP_VERSION: parameter.version
+                  }
+                  requests: parameter.resources.requests
+                  limits: parameter.resources.limits
+                }
+                traits: [
+                  // Connect to the PostgreSQL service
+                  {
+                    type: "service-binding"
+                    properties: {
+                      secret: "\(parameter.name)-db-conn"
+                      envMappings: {
+                        DB_HOST: "host"
+                        DB_PORT: "port"
+                        DB_NAME: "database"
+                        DB_USER: "username"
+                        DB_PASSWORD: "password"
+                      }
+                    }
+                  },
+                  // Expose the Spring Boot application
+                  {
+                    type: "expose"
+                    properties: {
+                      port: [parameter.port]
+                      type: "ClusterIP"
+                    }
+                  }
+                ]
+              }
+            ]
+            // Define a workflow for orderly deployment
+            workflow: {
+              steps: [
+                // First deploy the database
+                {
+                  name: "deploy-db"
+                  type: "apply-component"
+                  properties: {
+                    component: "\(parameter.name)-db"
+                  }
+                },
+                // Wait for the database to be ready
+                {
+                  name: "check-db-ready"
+                  type: "wait"
+                  properties: {
+                    continue: true
+                    timeout: "600s"
+                    resources: [
+                      {
+                        apiVersion: "infra.contrib.fluxcd.io/v1alpha2"
+                        kind: "Terraform"
+                        name: "\(parameter.name)-db"
+                      }
+                    ]
+                    conditions: [
+                      {
+                        status: "running"
+                        reason: "TerraformAppliedCompleted"
+                      }
+                    ]
+                  }
+                  dependsOn: [
+                    "deploy-db"
+                  ]
+                },
+                // Finally deploy the Spring Boot app
+                {
+                  name: "deploy-app"
+                  type: "apply-component"
+                  properties: {
+                    component: "\(parameter.name)-app"
+                  }
+                  dependsOn: [
+                    "check-db-ready"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+
+        parameter: {
+          // Basic application info
+          name: string
+          namespace: *"default" | string
+          image: string
+          version: string
+          
+          // GCP Project info
+          projectId: string
+          region: string
+          
+          // Application port
+          port: *8080 | int
+          
+          // PostgreSQL database configuration
+          dbConfig: {
+            name: string
+            size: *"small" | string
+          }
+          
+          // Resource requirements
+          resources: {
+            requests: {
+              cpu: *"100m" | string
+              memory: *"128Mi" | string
+            }
+            limits: {
+              cpu: *"500m" | string
+              memory: *"512Mi" | string
+            }
+          }
+        }

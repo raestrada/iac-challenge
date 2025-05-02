@@ -1,0 +1,120 @@
+apiVersion: core.oam.dev/v1beta1
+kind: ComponentDefinition
+metadata:
+  name: terraform-postgresql
+  namespace: vela-system
+  annotations:
+    definition.oam.dev/description: "Terraform component for provisioning a PostgreSQL instance on GCP"
+spec:
+  workload:
+    definition:
+      apiVersion: infra.contrib.fluxcd.io/v1alpha2
+      kind: Terraform
+  schematic:
+    terraform:
+      configuration: |
+        # Initialize the required providers
+        terraform {
+          required_providers {
+            google = {
+              source  = "hashicorp/google"
+              version = "~> 4.0"
+            }
+            random = {
+              source  = "hashicorp/random"
+              version = "~> 3.1"
+            }
+          }
+        }
+
+        # Pass variables to the PostgreSQL module
+        variable "name" {
+          type        = string
+          description = "Name of the PostgreSQL instance"
+        }
+
+        variable "size" {
+          type        = string
+          description = "Size of the PostgreSQL instance (small, medium, large)"
+          default     = "small"
+        }
+
+        variable "project_id" {
+          type        = string
+          description = "GCP Project ID"
+        }
+
+        variable "region" {
+          type        = string
+          description = "GCP Region for the CloudSQL instance"
+          default     = "us-central1"
+        }
+
+        # Reference the PostgreSQL module in our Git repository
+        module "postgresql" {
+          source     = "./tf-controller/gcp/postgresql"
+          name       = var.name
+          size       = var.size
+          project_id = var.project_id
+          region     = var.region
+        }
+
+        # Export outputs that applications need to connect to PostgreSQL
+        output "username" {
+          value = module.postgresql.username
+        }
+
+        output "password" {
+          value     = module.postgresql.password
+          sensitive = true
+        }
+
+        output "host" {
+          value = module.postgresql.host
+        }
+
+        output "port" {
+          value = module.postgresql.port
+        }
+
+        output "database" {
+          value = module.postgresql.database
+        }
+
+      providerRef:
+        name: gcp-provider
+      writeConnectionSecretToRef:
+        name: "{{ .name }}-conn"
+      runnerPodTemplate:
+        spec:
+          containers:
+            - name: "runner"
+              env:
+                - name: "GOOGLE_APPLICATION_CREDENTIALS"
+                  value: "/credentials/credentials.json"
+              volumeMounts:
+                - name: "gcp-credentials"
+                  mountPath: "/credentials"
+                  readOnly: true
+          volumes:
+            - name: "gcp-credentials"
+              secret:
+                secretName: "gcp-credentials"
+                items:
+                  - key: "credentials.json"
+                    path: "credentials.json"
+  status:
+    customStatus: |
+      if databaseReady {
+        message: "PostgreSQL database is ready"
+        status: "Ready"
+      } else {
+        message: "PostgreSQL database is not ready yet"
+        status: "Creating"
+      }
+      if errorExists {
+        message: errorMessage
+        status: "Error"
+      }
+    healthPolicy: |
+      isHealth: context.output.status == "Ready"

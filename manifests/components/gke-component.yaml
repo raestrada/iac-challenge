@@ -1,0 +1,113 @@
+apiVersion: core.oam.dev/v1beta1
+kind: ComponentDefinition
+metadata:
+  name: terraform-gke
+  namespace: vela-system
+  annotations:
+    definition.oam.dev/description: "Terraform component for provisioning a GKE cluster on GCP"
+spec:
+  workload:
+    definition:
+      apiVersion: infra.contrib.fluxcd.io/v1alpha2
+      kind: Terraform
+  schematic:
+    terraform:
+      configuration: |
+        # Initialize the required providers
+        terraform {
+          required_providers {
+            google = {
+              source  = "hashicorp/google"
+              version = "~> 4.0"
+            }
+          }
+        }
+
+        # Pass variables to the GKE module
+        variable "name" {
+          type        = string
+          description = "Name of the GKE cluster"
+        }
+
+        variable "size" {
+          type        = string
+          description = "Size of the GKE cluster (small, medium, large)"
+          default     = "small"
+        }
+
+        variable "project_id" {
+          type        = string
+          description = "GCP Project ID"
+        }
+
+        variable "region" {
+          type        = string
+          description = "GCP Region for the GKE cluster"
+          default     = "us-central1"
+        }
+
+        # Reference the GKE module in our Git repository
+        module "gke" {
+          source     = "./tf-controller/gcp/gke"
+          name       = var.name
+          size       = var.size
+          project_id = var.project_id
+          region     = var.region
+        }
+
+        # Export outputs that applications need to connect to GKE
+        output "cluster_name" {
+          value = module.gke.cluster_name
+        }
+
+        output "endpoint" {
+          value     = module.gke.endpoint
+          sensitive = true
+        }
+
+        output "kubeconfig" {
+          value     = module.gke.kubeconfig
+          sensitive = true
+        }
+
+        output "node_count" {
+          value = module.gke.node_count
+        }
+
+      providerRef:
+        name: gcp-provider
+      writeConnectionSecretToRef:
+        name: "{{ .name }}-conn"
+      runnerPodTemplate:
+        spec:
+          containers:
+            - name: "runner"
+              env:
+                - name: "GOOGLE_APPLICATION_CREDENTIALS"
+                  value: "/credentials/credentials.json"
+              volumeMounts:
+                - name: "gcp-credentials"
+                  mountPath: "/credentials"
+                  readOnly: true
+          volumes:
+            - name: "gcp-credentials"
+              secret:
+                secretName: "gcp-credentials"
+                items:
+                  - key: "credentials.json"
+                    path: "credentials.json"
+  status:
+    customStatus: |
+      if clusterReady {
+        message: "GKE cluster is ready"
+        status: "Ready"
+      } else {
+        message: "GKE cluster is not ready yet"
+        status: "Creating"
+      }
+      if errorExists {
+        message: errorMessage
+        status: "Error"
+      }
+    healthPolicy: |
+      isHealth: context.output.status == "Ready"
