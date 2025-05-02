@@ -1,5 +1,41 @@
 # Infrastructure as Code Challenge - Control Plane Architecture with KubeVela and Tofu-Controller
 
+![architecture](https://miro.medium.com/v2/resize:fit:1400/0*UF_t_MBXZ-wq0Z3t)
+
+## From Complex Infrastructure to a Single YAML
+
+This project demonstrates how infrastructure complexity can be abstracted into a simple, declarative YAML file. Instead of managing numerous resources across multiple tools, developers can deploy an entire application stack with a single command:
+
+```yaml
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: my-spring-app
+  namespace: default
+spec:
+  components:
+    - name: web-app
+      type: spring-app-with-db
+      properties:
+        name: my-online-store
+        image: "example/spring-app:latest"
+        version: "1.0.0"
+        projectId: "${GCP_PROJECT_ID}"
+        region: "${GCP_REGION}"
+        dbConfig:
+          name: "online-store-db"
+          size: "small"
+```
+
+With just this YAML file, the system will:
+
+1. **Provision Infrastructure** - Creates a PostgreSQL database in Google Cloud
+2. **Deploy Application** - Deploys your Spring Boot application
+3. **Connect Components** - Automatically configures database connections
+4. **Apply Best Practices** - Follows infrastructure best practices and security patterns
+
+All of this happens automatically through the GitOps-powered control plane, eliminating manual steps and configuration drift.
+
 ## Overview
 
 This project implements a modern infrastructure and application deployment approach using Kubernetes as a control plane with KubeVela and Tofu-Controller. It follows the architecture detailed in the article [Building a Highly Flexible Control Plane with Kubevela and Tofu-Controller: A Step-by-Step Guide](https://medium.com/@rodrigo.estrada/building-a-highly-flexible-control-plane-with-kubevela-and-tofu-controller-a-step-by-step-guide-61844cf3bc40) to deploy a Spring Boot microservice with PostgreSQL database on Google Cloud Platform (GCP).
