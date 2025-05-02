@@ -90,7 +90,8 @@ tasks:
       - task: flux:status
       - task: kubevela:status
       - task: tofu:status
-      - echo "To check GCP resources status, run: task gcp-status"
+      - |
+        echo "To check GCP resources status, run: task gcp-status"
     silent: false
 
   access-ui:
@@ -100,12 +101,20 @@ tasks:
     silent: false
 
   bootstrap-gitops:
-    desc: Bootstrap Flux with GitOps repository
+    desc: Bootstrap Flux with GitOps repository (includes installing all K8s components)
     deps: [install-k8s-components]
     cmds:
       - task: gcp:create-secret
       - task: gcp:apply-git-repository
       - echo "GitOps repository configured successfully. Flux will now synchronize with the Git repository."
+    silent: false
+    
+  setup-gcp-gitops:
+    desc: Setup GCP credentials and Git repository without reinstalling K8s components
+    cmds:
+      - task: gcp:create-secret
+      - task: gcp:apply-git-repository
+      - echo "GitOps repository configured successfully without reinstalling components."
     silent: false
 
   bootstrap-flux-gitops:

@@ -103,3 +103,4 @@ kubeconfig
 Thumbs.db
 
 .env
+sa.json
