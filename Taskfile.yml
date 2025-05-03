@@ -25,8 +25,13 @@ includes:
     taskfile: ./scripts/setup/Taskfile.gcp-credentials.yml
   components:
     taskfile: ./scripts/setup/Taskfile.components.yml
+    dir: .
   flux-deployments:
     taskfile: ./scripts/setup/Taskfile.flux-deployments.yml
+    dir: .
+  nginx-ingress:
+    taskfile: ./scripts/setup/Taskfile.nginx-ingress.yml
+    dir: .
 
 tasks:
   install-task:
@@ -122,16 +127,15 @@ tasks:
     silent: false
 
   setup-flux-deployments:
-    desc: Configure Flux to monitor staging and production deployment directories
-    deps: [bootstrap-flux-gitops]
+    desc: Setup Flux Kustomizations for GitOps deployments
     cmds:
-      - task: flux-deployments:apply-kustomizations
-      - |
-        echo "\nDeployment directories are now being monitored by Flux:"
-        echo "  - deployments/staging"
-        echo "  - deployments/production"
-        echo "\nTo check the status of the Kustomizations:"
-        echo "  task flux-deployments:check-status"
+      - task: flux-deployments:apply-all
+
+  setup-nginx-ingress:
+    desc: Deploy and configure Nginx Ingress Controller on GKE
+    cmds:
+      - task: nginx-ingress:install
+      - task: nginx-ingress:get-ingress-ip
     silent: false
 
   bootstrap-flux-gitops:

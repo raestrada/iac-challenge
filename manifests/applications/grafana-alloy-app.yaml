@@ -1,0 +1,237 @@
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: grafana-alloy
+  namespace: vela-system
+spec:
+  components:
+    - name: grafana-alloy
+      type: helm
+      properties:
+        repoType: "helm"
+        url: "https://grafana.github.io/helm-charts"
+        chart: "grafana-agent"
+        version: "0.32.0"  # Use the latest stable version
+        values:
+          agent:
+            mode: "flow"  # Use Flow mode (Alloy)
+            configReloader:
+              enabled: true
+              extraArgs:
+                log-level: info
+            extraArgs:
+              server.http.listen-addr: "0.0.0.0:12345"
+              enable-features: "flow,integrations-next"
+              config.expand-env: "true"
+              config.file: "/etc/agent/config.river"
+              storage.path: "/tmp/agent"
+            resources:
+              limits:
+                cpu: 1000m
+                memory: 1Gi
+              requests:
+                cpu: 200m
+                memory: 256Mi
+          
+          controller:
+            type: "statefulset"
+            replicas: 1
+            
+          # Auto-discovery for Kubernetes
+          metrics:
+            instance:
+              autodiscovery:
+                enabled: true
+            
+          # Enable service account with proper permissions
+          rbac:
+            create: true
+            extraRules:
+              - apiGroups: [""]
+                resources: ["nodes", "nodes/proxy", "services", "endpoints", "pods"]
+                verbs: ["get", "list", "watch"]
+              - apiGroups: [""]
+                resources: ["configmaps"]
+                verbs: ["get"]
+              - nonResourceURLs: ["/metrics"]
+                verbs: ["get"]
+          
+          # Configurations to be mounted as a ConfigMap  
+          configMap:
+            create: true
+            content: |
+              logging {
+                level  = "info"
+                format = "logfmt"
+              }
+
+              // Retrieve environment variables for Grafana Cloud credentials
+              grafana_cloud_zone = env("GRAFANA_CLOUD_ZONE")
+              metrics_username = env("METRICS_USERNAME")
+              metrics_api_key = env("METRICS_API_KEY")
+              logs_username = env("LOGS_USERNAME")
+              logs_api_key = env("LOGS_API_KEY")
+              traces_username = env("TRACES_USERNAME")
+              traces_api_key = env("TRACES_API_KEY")
+              
+              // Metrics collection
+              prometheus.scrape "kubernetes_pods" {
+                targets = kubernetes.pods {
+                  namespaces = [".*"]
+                }
+                forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+                job_name = "kubernetes-pods"
+              }
+
+              prometheus.scrape "kubernetes_nodes" {
+                targets = kubernetes.nodes {}
+                forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+                job_name = "kubernetes-nodes"
+              }
+
+              prometheus.scrape "kubernetes_api_server" {
+                targets = kubernetes.services {
+                  selectors = ["kubernetes"]
+                  namespaces = ["default"]
+                  port = 443
+                  use_service_account = true
+                }
+                scheme = "https"
+                forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+                job_name = "kubernetes-apiservers"
+                tls_config {
+                  insecure_skip_verify = true
+                }
+              }
+
+              prometheus.remote_write "grafana_cloud" {
+                endpoint {
+                  url = "https://${grafana_cloud_zone}.grafana.net/api/prom/push"
+                  basic_auth {
+                    username = metrics_username
+                    password = metrics_api_key
+                  }
+                }
+              }
+              
+              // Logs collection
+              loki.source.kubernetes "pods" {
+                forward_to = [loki.write.grafana_cloud.receiver]
+              }
+              
+              loki.write "grafana_cloud" {
+                endpoint {
+                  url = "https://${grafana_cloud_zone}.grafana.net/loki/api/v1/push"
+                  basic_auth {
+                    username = logs_username
+                    password = logs_api_key
+                  }
+                }
+              }
+              
+              // Traces collection
+              otelcol.receiver.otlp "default" {
+                grpc {
+                  endpoint = "0.0.0.0:4317"
+                }
+                http {
+                  endpoint = "0.0.0.0:4318"
+                }
+                output {
+                  metrics = [otelcol.processor.batch.default.input]
+                  logs = [otelcol.processor.batch.default.input]
+                  traces = [otelcol.processor.batch.default.input]
+                }
+              }
+              
+              otelcol.processor.batch "default" {
+                output {
+                  traces = [otelcol.exporter.otlp.grafana_cloud.input]
+                }
+              }
+              
+              otelcol.exporter.otlp "grafana_cloud" {
+                client {
+                  endpoint = "https://tempo-${grafana_cloud_zone}.grafana.net:443/otlp"
+                  auth = otelcol.auth.basic.grafana_cloud.handler
+                }
+              }
+              
+              otelcol.auth.basic "grafana_cloud" {
+                username = traces_username
+                password = traces_api_key
+              }
+          
+          # Create a secret with Grafana Cloud credentials
+          secret:
+            create: true
+            data:
+              GRAFANA_CLOUD_ZONE: "{{.Values.grafana.cloud.zone}}"
+              METRICS_USERNAME: "{{.Values.grafana.cloud.metrics.username}}"
+              METRICS_API_KEY: "{{.Values.grafana.cloud.metrics.apiKey}}"
+              LOGS_USERNAME: "{{.Values.grafana.cloud.logs.username}}"
+              LOGS_API_KEY: "{{.Values.grafana.cloud.logs.apiKey}}"
+              TRACES_USERNAME: "{{.Values.grafana.cloud.traces.username}}"
+              TRACES_API_KEY: "{{.Values.grafana.cloud.traces.apiKey}}"
+          
+          # Extra environment variables to be passed from the secret
+          extraEnv:
+            - name: GRAFANA_CLOUD_ZONE
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-alloy
+                  key: GRAFANA_CLOUD_ZONE
+            - name: METRICS_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-alloy
+                  key: METRICS_USERNAME
+            - name: METRICS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-alloy
+                  key: METRICS_API_KEY
+            - name: LOGS_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-alloy
+                  key: LOGS_USERNAME
+            - name: LOGS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-alloy
+                  key: LOGS_API_KEY
+            - name: TRACES_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-alloy
+                  key: TRACES_USERNAME
+            - name: TRACES_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-alloy
+                  key: TRACES_API_KEY
+          
+          # Service to expose the agent
+          service:
+            annotations: {}
+            enabled: true
+            type: ClusterIP
+            
+          serviceMonitor:
+            enabled: false
+          
+          # GKE specific node selector
+          nodeSelector: {}
+          
+          # Tolerations to allow running on system nodes
+          tolerations:
+            - effect: NoSchedule
+              operator: Exists
+          
+  workflow:
+    steps:
+      - name: apply-grafana-alloy
+        type: apply-component
+        properties:
+          component: grafana-alloy

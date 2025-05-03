@@ -1,0 +1,170 @@
+version: '3'
+
+# Taskfile for deploying and managing Nginx Ingress on GKE
+# This can be imported by the root Taskfile.yml
+
+tasks:
+  install:
+    desc: Deploy Nginx Ingress Controller on GKE using KubeVela
+    cmds:
+      - echo "Applying Nginx Ingress KubeVela Application..."
+      - kubectl apply -f {{.PROJECT_DIR}}/manifests/applications/nginx-ingress-app.yaml
+      - echo "Waiting for Nginx Ingress to be ready..." 
+      - kubectl -n vela-system wait --for=condition=running --timeout=300s application/nginx-ingress
+    vars:
+      PROJECT_DIR:
+        sh: git rev-parse --show-toplevel
+
+  check-status:
+    desc: Check the status of Nginx Ingress Controller deployment
+    cmds:
+      - echo "Checking Nginx Ingress Application status..."
+      - kubectl -n vela-system get application nginx-ingress -o yaml | yq -r '.status.status'
+      - echo "Checking Nginx Ingress Controller Pods..."
+      - kubectl get pods -n ingress-nginx
+      - echo "Checking Nginx Ingress Service (Load Balancer)..."
+      - kubectl get svc -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx
+
+  get-ingress-ip:
+    desc: Get the external IP of the Nginx Ingress Controller
+    cmds:
+      - echo "Getting Nginx Ingress Controller external IP..."
+      - |
+        INGRESS_IP=$(kubectl get svc -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}')
+        if [ -z "$INGRESS_IP" ]; then
+          echo "Waiting for load balancer to be provisioned..."
+          kubectl get svc -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx -w
+        else
+          echo "Nginx Ingress Controller external IP: $INGRESS_IP"
+          echo "You can now configure your DNS to point to this IP address"
+          echo ""
+          echo "For example, add these records to your DNS:"
+          echo "*.example.com.   A   $INGRESS_IP"
+        fi
+
+  test-ingress:
+    desc: Deploy a test application with ingress
+    cmds:
+      - echo "Deploying a test application with Nginx Ingress..."
+      - |
+        cat <<EOF | kubectl apply -f -
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: test-app
+          namespace: default
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app: test-app
+          template:
+            metadata:
+              labels:
+                app: test-app
+            spec:
+              containers:
+              - name: test-app
+                image: gcr.io/google-samples/hello-app:1.0
+                ports:
+                - containerPort: 8080
+        ---
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: test-app
+          namespace: default
+        spec:
+          ports:
+          - port: 80
+            targetPort: 8080
+          selector:
+            app: test-app
+        ---
+        apiVersion: networking.k8s.io/v1
+        kind: Ingress
+        metadata:
+          name: test-app-ingress
+          namespace: default
+          annotations:
+            kubernetes.io/ingress.class: "nginx"
+        spec:
+          rules:
+          - host: "test.example.com"
+            http:
+              paths:
+              - path: /
+                pathType: Prefix
+                backend:
+                  service:
+                    name: test-app
+                    port:
+                      number: 80
+        EOF
+      - echo "Test application deployed."
+      - echo "Add the following to your /etc/hosts file to test:"
+      - echo "$(kubectl get svc -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}') test.example.com"
+      - echo "Then access http://test.example.com in your browser"
+
+  upgrade:
+    desc: Upgrade Nginx Ingress Controller to the latest version
+    cmds:
+      - echo "Updating Nginx Ingress Application with the latest Helm chart version..."
+      - |
+        # Get the latest chart version
+        LATEST_VERSION=$(curl -s https://kubernetes.github.io/ingress-nginx/index.yaml | grep -A1 "ingress-nginx" | grep version | head -1 | awk '{print $2}')
+        echo "Latest Nginx Ingress chart version: $LATEST_VERSION"
+        
+        # Update the chart version in the application manifest
+        sed -i "s/version: \"[0-9.]*\"/version: \"$LATEST_VERSION\"/" {{.PROJECT_DIR}}/manifests/applications/nginx-ingress-app.yaml
+        
+        # Apply the updated manifest
+        kubectl apply -f {{.PROJECT_DIR}}/manifests/applications/nginx-ingress-app.yaml
+    vars:
+      PROJECT_DIR:
+        sh: git rev-parse --show-toplevel
+
+  uninstall:
+    desc: Uninstall Nginx Ingress Controller
+    cmds:
+      - echo "Removing Nginx Ingress Application..."
+      - kubectl delete -f {{.PROJECT_DIR}}/manifests/applications/nginx-ingress-app.yaml
+    vars:
+      PROJECT_DIR:
+        sh: git rev-parse --show-toplevel
+
+  configure-ssl:
+    desc: Configure cert-manager for SSL with Let's Encrypt
+    cmds:
+      - echo "Installing cert-manager for SSL..."
+      - |
+        # Apply the cert-manager CRDs and deployment
+        kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.12.0/cert-manager.yaml
+        
+        # Wait for cert-manager to be ready
+        kubectl -n cert-manager wait --for=condition=available --timeout=300s deployment/cert-manager
+        
+        # Create ClusterIssuer for Let's Encrypt production
+        cat <<EOF | kubectl apply -f -
+        apiVersion: cert-manager.io/v1
+        kind: ClusterIssuer
+        metadata:
+          name: letsencrypt-prod
+        spec:
+          acme:
+            server: https://acme-v02.api.letsencrypt.org/directory
+            email: {{.EMAIL}}
+            privateKeySecretRef:
+              name: letsencrypt-prod
+            solvers:
+            - http01:
+                ingress:
+                  class: nginx
+        EOF
+        
+        echo "cert-manager installed and configured with Let's Encrypt"
+        echo "You can now add the following annotation to your Ingress resources:"
+        echo "cert-manager.io/cluster-issuer: letsencrypt-prod"
+    vars:
+      EMAIL:
+        sh: git config user.email || echo "admin@example.com"
