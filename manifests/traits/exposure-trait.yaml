@@ -1,0 +1,221 @@
+apiVersion: core.oam.dev/v1beta1
+kind: TraitDefinition
+metadata:
+  name: exposure
+  annotations:
+    definition.oam.dev/description: "Exposes a component through either Nginx Ingress or Cloudflare Tunnel"
+spec:
+  appliesToWorkloads:
+    - webservice
+    - worker
+  schematic:
+    cue:
+      template: |
+        #ExposureType: "nginx" | "cloudflare"
+        
+        parameter: {
+          // Exposure type, either "nginx" or "cloudflare"
+          type: #ExposureType
+          // The domain to expose the service on
+          domain: string
+          // Path prefix (optional, defaults to "/")
+          path: *"/" | string
+          // Port to expose (defaults to 8080)
+          port: *8080 | int
+          // Cloudflare specific settings
+          cloudflare?: {
+            // Cloudflare Account ID
+            accountId: string
+            // Tunnel Name - will create if not exists
+            tunnelName: string
+            // Secret name containing Cloudflare API token
+            secretName: string
+            // Whether to use the Cloudflare proxy (defaults to true)
+            proxied: *true | bool
+            // Cloudflare zone for the domain
+            zoneId: string
+          }
+          // NGINX Ingress specific settings
+          nginx?: {
+            // Use TLS (defaults to true)
+            tls: *true | bool
+            // Annotations for the Ingress
+            annotations?: [string]: string
+            // TLS secret name (optional)
+            tlsSecret?: string
+            // Ingress class name
+            ingressClassName: *"nginx" | string
+          }
+        }
+
+        // Patch configuration based on exposure type
+        patches: []
+        
+        // For NGINX Ingress Controller
+        if parameter.type == "nginx" {
+          patches: [
+            {
+              op: "add"
+              path: "/spec/template/spec/supplements/-"
+              value: {
+                apiVersion: "networking.k8s.io/v1"
+                kind: "Ingress"
+                metadata: {
+                  name: context.name
+                  annotations: {
+                    if parameter.nginx != _|_ && parameter.nginx.annotations != _|_ {
+                      parameter.nginx.annotations
+                    }
+                    if parameter.nginx == _|_ || parameter.nginx.annotations == _|_ {
+                      "kubernetes.io/ingress.class": parameter.nginx.ingressClassName | *"nginx"
+                    }
+                  }
+                }
+                spec: {
+                  ingressClassName: parameter.nginx.ingressClassName | *"nginx"
+                  if parameter.nginx != _|_ && parameter.nginx.tls {
+                    tls: [
+                      {
+                        hosts: [parameter.domain]
+                        if parameter.nginx.tlsSecret != _|_ {
+                          secretName: parameter.nginx.tlsSecret
+                        }
+                      }
+                    ]
+                  }
+                  rules: [
+                    {
+                      host: parameter.domain
+                      http: {
+                        paths: [
+                          {
+                            path: parameter.path
+                            pathType: "Prefix"
+                            backend: {
+                              service: {
+                                name: context.name
+                                port: {
+                                  number: parameter.port
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+
+        // For Cloudflare Tunnel
+        if parameter.type == "cloudflare" {
+          if parameter.cloudflare == _|_ {
+            parameter: cloudflare: {
+              accountId: ""
+              tunnelName: ""
+              secretName: ""
+              zoneId: ""
+            }
+          }
+          
+          patches: [
+            {
+              op: "add"
+              path: "/spec/template/spec/containers/-"
+              value: {
+                name: "cloudflared"
+                image: "cloudflare/cloudflared:latest"
+                command: ["cloudflared", "tunnel", "--no-autoupdate", "run"]
+                ports: [
+                  {
+                    containerPort: 8080
+                    name: "metrics"
+                  }
+                ]
+                resources: {
+                  requests: {
+                    cpu: "100m"
+                    memory: "128Mi"
+                  }
+                  limits: {
+                    cpu: "200m"
+                    memory: "256Mi"
+                  }
+                }
+                volumeMounts: [
+                  {
+                    name: "cloudflare-credentials"
+                    mountPath: "/etc/cloudflared"
+                    readOnly: true
+                  }
+                  {
+                    name: "tunnel-config"
+                    mountPath: "/etc/tunnel"
+                    readOnly: true
+                  }
+                ]
+              }
+            }
+            {
+              op: "add"
+              path: "/spec/template/spec/volumes/-"
+              value: {
+                name: "cloudflare-credentials"
+                secret: {
+                  secretName: parameter.cloudflare.secretName
+                  items: [
+                    {
+                      key: "credentials.json"
+                      path: "credentials.json"
+                    }
+                  ]
+                }
+              }
+            }
+            {
+              op: "add"
+              path: "/spec/template/spec/volumes/-"
+              value: {
+                name: "tunnel-config"
+                configMap: {
+                  name: context.name + "-tunnel-config"
+                }
+              }
+            }
+            {
+              op: "add"
+              path: "/spec/template/spec/supplements/-"
+              value: {
+                apiVersion: "v1"
+                kind: "ConfigMap"
+                metadata: {
+                  name: context.name + "-tunnel-config"
+                }
+                data: {
+                  "config.yaml": "tunnel: " + parameter.cloudflare.tunnelName + "\ncredentials-file: /etc/cloudflared/credentials.json\ningress:\n- hostname: " + parameter.domain + "\n  service: http://localhost:" + "\(parameter.port)" + parameter.path + "\n- service: http_status:404\n"
+                }
+              }
+            }
+          ]
+        }
+        
+        outputs: {
+          if parameter.type == "nginx" {
+            ingress: {
+              domain: parameter.domain
+              path: parameter.path
+              type: "nginx"
+            }
+          }
+          if parameter.type == "cloudflare" {
+            tunnel: {
+              domain: parameter.domain
+              path: parameter.path
+              type: "cloudflare"
+              tunnelName: parameter.cloudflare.tunnelName
+            }
+          }
+        }
