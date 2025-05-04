@@ -7,6 +7,8 @@
 > 🔒 **Exposure Options**: Learn how to expose services via [Nginx Ingress or Cloudflare Tunnel](docs/exposure-trait.md) using our configurable trait.
 > 
 > 🚀 **GKE Ingress**: Deploy [Nginx Ingress Controller on GKE](docs/nginx-ingress-gke.md) with our optimized KubeVela manifests and Taskfiles.
+> 
+> 🤖 **AI Assistance**: Read about how [AI was used in this project](docs/ai-assistance.md) while maintaining human-directed architecture and implementation.
 
 ![architecture](https://miro.medium.com/v2/resize:fit:1400/0*UF_t_MBXZ-wq0Z3t)
 
