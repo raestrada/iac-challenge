@@ -189,25 +189,87 @@ Using Tofu-Controller within Kubernetes solves these problems by:
 
 4. **Resource Dependencies**: Define relationships between infrastructure components and applications through Kubernetes.
 
-## Managed Services Integration
+## Secure Secret Management
 
-This project leverages several managed services to enhance monitoring, cost management, and code quality:
+This project implements a secure, automated approach to secret management using KubeVela traits and Kubernetes secrets, with special handling for infrastructure credentials:
+
+### Infrastructure Secret Flow
+
+1. **Secret Capture from Tofu Controller**: Infrastructure components (GKE, PostgreSQL) automatically output sensitive configuration to Kubernetes secrets through Tofu Controller's `writeOutputsToSecret` mechanism.
+
+   ```yaml
+   # In the GKE component definition
+   writeOutputsToSecret:
+     name: "{{ context.name }}-conn"
+   ```
+
+2. **Automatic Secret Generation**: When Tofu Controller successfully provisions infrastructure, it automatically creates Kubernetes secrets containing connection details:
+   - Database credentials (username, password)
+   - Connection strings
+   - API endpoints
+   - Authentication tokens
+
+3. **Service Binding Trait**: Applications use the service-binding trait to securely consume these secrets without manual intervention:
+
+   ```yaml
+   traits:
+     - type: service-binding
+       properties:
+         envMappings:
+           DATABASE_URL: ${resources.db.outputs.connection_string}
+           DB_USERNAME: ${resources.db.outputs.username}
+           DB_PASSWORD: ${resources.db.outputs.password}
+   ```
+
+### Security Advantages
+
+1. **Zero Human Exposure**: Credentials are never exposed to humans or logged
+2. **Dynamic Rotation**: Credentials can be rotated by simply re-deploying infrastructure
+3. **Least Privilege Access**: Applications only receive the specific secrets they need
+4. **GitOps Compatible**: Secret references (not values) are version-controlled
+5. **Infrastructure as Code**: All secret handling is declarative and automated
+
+### GCP Credential Management
+
+For GCP service account credentials used by Tofu Controller:
+1. Credentials are stored as Kubernetes secrets in the `flux-system` namespace
+2. Runner pods mount these credentials through the `runnerPodTemplate` configuration
+3. Pods use the GCP credentials to authenticate with Google Cloud APIs
+
+```yaml
+runnerPodTemplate:
+  spec:
+    containers:
+      - name: "runner"
+        env:
+          - name: "GOOGLE_APPLICATION_CREDENTIALS"
+            value: "/credentials/credentials.json"
+        volumeMounts:
+          - name: "gcp-credentials"
+            mountPath: "/credentials"
+            readOnly: true
+    volumes:
+      - name: "gcp-credentials"
+        secret:
+          secretName: "gcp-credentials"
+          items:
+            - key: "credentials.json"
+              path: "credentials.json"
+```
+
+## Managed Services
+
+The project leverages several managed services to enhance its capabilities:
 
 ### 1. Grafana Cloud
-
-Integrated for comprehensive monitoring of both infrastructure and applications:
-
-- **Metrics Monitoring**: Collects and visualizes performance metrics from the Kubernetes cluster and applications
-- **Logs Management**: Centralizes log collection and analysis from all components
-- **Distributed Tracing**: Tracks request flows across microservices
+* **Purpose**: Centralized monitoring and observability
+* **Integration**: Uses Prometheus exporters and OpenTelemetry collectors
+* **Benefits**: Eliminates need for self-hosted monitoring stack
 
 ### 2. SonarQube Cloud
-
-Implemented for continuous code quality and security analysis:
-
-- **Static Code Analysis**: Identifies code quality issues and bugs
-- **Security Vulnerability Detection**: Discovers potential security vulnerabilities
-- **Code Coverage Tracking**: Monitors test coverage over time
+* **Purpose**: Static code analysis for both application and infrastructure code
+* **Integration**: Integrated in CI pipeline through GitHub Actions
+* **Benefits**: Advanced vulnerability detection and code quality metrics
 
 ### 3. Infracost
 
