@@ -119,7 +119,6 @@ tasks:
       # Install component definitions
       - |
         echo "Installing KubeVela component definitions..."
-        kubectl apply -f manifests/components/gcp-provider.yaml || true
         sleep 2
         kubectl apply -f manifests/components/gke-component.yaml
         kubectl apply -f manifests/components/postgresql-component.yaml

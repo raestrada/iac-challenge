@@ -11,98 +11,68 @@ spec:
       apiVersion: infra.contrib.fluxcd.io/v1alpha2
       kind: Terraform
   schematic:
-    terraform:
-      configuration: |
-        # Initialize the required providers
-        terraform {
-          required_providers {
-            google = {
-              source  = "hashicorp/google"
-              version = "~> 4.0"
+    cue:
+      template: |
+        output: {
+          apiVersion: "infra.contrib.fluxcd.io/v1alpha2"
+          kind:       "Terraform"
+          metadata: {
+            name: context.name
+          }
+          spec: {
+            interval: "10m"
+            path:     "./tf-controller/gcp/postgresql"
+            values: {
+              name:       parameter.name
+              size:       parameter.size
+              project_id: parameter.project_id
+              region:     parameter.region
             }
-            random = {
-              source  = "hashicorp/random"
-              version = "~> 3.1"
+            sourceRef: {
+              kind:      "GitRepository"
+              name:      "terraform-gcp"
+              namespace: "flux-system"
+            }
+            writeOutputsToSecret: {
+              name: context.name + "-conn"
+            }
+            runnerPodTemplate: {
+              spec: {
+                containers: [{
+                  name: "runner"
+                  env: [{
+                    name:  "GOOGLE_APPLICATION_CREDENTIALS"
+                    value: "/credentials/credentials.json"
+                  }]
+                  volumeMounts: [{
+                    name:      "gcp-credentials"
+                    mountPath: "/credentials"
+                    readOnly:  true
+                  }]
+                }]
+                volumes: [{
+                  name: "gcp-credentials"
+                  secret: {
+                    secretName: "gcp-credentials"
+                    items: [{
+                      key:  "credentials.json"
+                      path: "credentials.json"
+                    }]
+                  }
+                }]
+              }
             }
           }
         }
 
-        # Pass variables to the PostgreSQL module
-        variable "name" {
-          type        = string
-          description = "Name of the PostgreSQL instance"
+        parameter: {
+          // PostgreSQL configuration
+          name: string
+          size: *"small" | "medium" | "large"
+          project_id: string
+          region: *"us-central1" | string
         }
 
-        variable "size" {
-          type        = string
-          description = "Size of the PostgreSQL instance (small, medium, large)"
-          default     = "small"
-        }
-
-        variable "project_id" {
-          type        = string
-          description = "GCP Project ID"
-        }
-
-        variable "region" {
-          type        = string
-          description = "GCP Region for the CloudSQL instance"
-          default     = "us-central1"
-        }
-
-        # Reference the PostgreSQL module in our Git repository
-        module "postgresql" {
-          source     = "./tf-controller/gcp/postgresql"
-          name       = var.name
-          size       = var.size
-          project_id = var.project_id
-          region     = var.region
-        }
-
-        # Export outputs that applications need to connect to PostgreSQL
-        output "username" {
-          value = module.postgresql.username
-        }
-
-        output "password" {
-          value     = module.postgresql.password
-          sensitive = true
-        }
-
-        output "host" {
-          value = module.postgresql.host
-        }
-
-        output "port" {
-          value = module.postgresql.port
-        }
-
-        output "database" {
-          value = module.postgresql.database
-        }
-
-      providerRef:
-        name: gcp-provider
-      writeConnectionSecretToRef:
-        name: "{{ .name }}-conn"
-      runnerPodTemplate:
-        spec:
-          containers:
-            - name: "runner"
-              env:
-                - name: "GOOGLE_APPLICATION_CREDENTIALS"
-                  value: "/credentials/credentials.json"
-              volumeMounts:
-                - name: "gcp-credentials"
-                  mountPath: "/credentials"
-                  readOnly: true
-          volumes:
-            - name: "gcp-credentials"
-              secret:
-                secretName: "gcp-credentials"
-                items:
-                  - key: "credentials.json"
-                    path: "credentials.json"
   status:
     customStatus: |
       if databaseReady {
