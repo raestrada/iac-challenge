@@ -42,7 +42,7 @@ jobs:
         uses: ibiqlik/action-yamllint@v3
         with:
           file_or_dir: manifests/
-          config_file: .github/workflows/yamllint.yml
+          config_file: .github/config/yamllint.yml
           strict: false
         continue-on-error: true
           
