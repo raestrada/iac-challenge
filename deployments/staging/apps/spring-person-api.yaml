@@ -1,0 +1,27 @@
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: staging-spring-person-api
+  namespace: default
+spec:
+  components:
+    - name: person-api
+      type: spring-app-with-db
+      properties:
+        name: person-api
+        namespace: default
+        image: "us-central1-docker.pkg.dev/lukalibre/spring-apps/spring-person-api:20250504161901"
+        version: "1.0.0"
+        projectId: "${GCP_PROJECT_ID}"
+        region: "${GCP_REGION}"
+        port: 8080
+        dbConfig:
+          name: "person-api-db"
+          size: "small"
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
