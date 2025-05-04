@@ -19,6 +19,40 @@ This project implements a production-ready control plane for managing infrastruc
 > 
 > 🤖 **AI Assistance**: Read about how [AI was used in this project](docs/ai-assistance.md) while maintaining human-directed architecture and implementation.
 
+## From Complex Infrastructure to a Single YAML
+
+This project demonstrates how infrastructure complexity can be abstracted into a simple, declarative YAML file. Instead of managing numerous resources across multiple tools, developers can deploy an entire application stack with a single command:
+
+```yaml
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: my-spring-app
+  namespace: default
+spec:
+  components:
+    - name: web-app
+      type: spring-app-with-db
+      properties:
+        name: my-online-store
+        image: "example/spring-app:latest"
+        version: "1.0.0"
+        projectId: "${GCP_PROJECT_ID}"
+        region: "${GCP_REGION}"
+        dbConfig:
+          name: "online-store-db"
+          size: "small"
+```
+
+With just this YAML file, the system will:
+
+1. **Provision Infrastructure** - Creates a PostgreSQL database in Google Cloud
+2. **Deploy Application** - Deploys your Spring Boot application
+3. **Connect Components** - Automatically configures database connections
+4. **Apply Best Practices** - Follows infrastructure best practices and security patterns
+
+All of this happens automatically through the GitOps-powered control plane, eliminating manual steps and configuration drift.
+
 ## Key Features
 
 - **GitOps-Powered Infrastructure & Applications**: Everything is defined as code in Git and automatically reconciled
@@ -70,41 +104,41 @@ This project uses GitHub Actions for robust CI/CD pipeline implementation:
   - Infracost for cost estimation
 - **Triggers**: Changes to tf-controller directory, pull requests, or manual trigger
 
-![architecture](https://miro.medium.com/v2/resize:fit:1400/0*UF_t_MBXZ-wq0Z3t)
-
-## From Complex Infrastructure to a Single YAML
-
-This project demonstrates how infrastructure complexity can be abstracted into a simple, declarative YAML file. Instead of managing numerous resources across multiple tools, developers can deploy an entire application stack with a single command:
-
-```yaml
-apiVersion: core.oam.dev/v1beta1
-kind: Application
-metadata:
-  name: my-spring-app
-  namespace: default
-spec:
-  components:
-    - name: web-app
-      type: spring-app-with-db
-      properties:
-        name: my-online-store
-        image: "example/spring-app:latest"
-        version: "1.0.0"
-        projectId: "${GCP_PROJECT_ID}"
-        region: "${GCP_REGION}"
-        dbConfig:
-          name: "online-store-db"
-          size: "small"
+```mermaid
+flowchart TD
+    subgraph "GitOps Control Plane"
+        Flux[Flux CD] --Reconciles--> KubeVela[KubeVela]
+        KubeVela --Uses--> TofuCtrl[Tofu-Controller]
+        Git[Git Repository] --Watched by--> Flux
+    end
+    
+    subgraph "Google Cloud Platform"
+        TofuCtrl --Provisions--> GKE[GKE Cluster]
+        TofuCtrl --Provisions--> CloudSQL[Cloud SQL PostgreSQL]
+        GKE --Runs--> SpringApp[Spring Boot App]
+        SpringApp --Connects to--> CloudSQL
+        CloudSQL --Secrets Stored in--> K8sSecrets[Kubernetes Secrets]
+        SpringApp --Published to--> ArtifactReg[Artifact Registry]
+    end
+    
+    subgraph "CI/CD Pipeline"
+        GitHub[GitHub Actions] --Security Scan--> SecurityScan[Security Scanning]
+        SecurityScan --Triggers--> DockerBuild[Docker Build & Push]
+        GitHub --Validates--> K8sManifests[K8s Manifests Validation]
+        GitHub --Validates--> TerraformCode[Terraform Validation]
+        DockerBuild --Pushes to--> ArtifactReg
+    end
+    
+    Git --Stores--> AppConfig[Application Config]
+    Git --Stores--> InfraCode[Infrastructure Code]
+    
+    style Flux fill:#326ce5,color:white
+    style KubeVela fill:#326ce5,color:white
+    style TofuCtrl fill:#326ce5,color:white
+    style GKE fill:#4285F4,color:white
+    style CloudSQL fill:#4285F4,color:white
+    style ArtifactReg fill:#4285F4,color:white
 ```
-
-With just this YAML file, the system will:
-
-1. **Provision Infrastructure** - Creates a PostgreSQL database in Google Cloud
-2. **Deploy Application** - Deploys your Spring Boot application
-3. **Connect Components** - Automatically configures database connections
-4. **Apply Best Practices** - Follows infrastructure best practices and security patterns
-
-All of this happens automatically through the GitOps-powered control plane, eliminating manual steps and configuration drift.
 
 ## Overview
 
