@@ -8,7 +8,7 @@ tasks:
     desc: Deploy Nginx Ingress Controller on GKE using KubeVela
     cmds:
       - echo "Applying Nginx Ingress KubeVela Application..."
-      - kubectl apply -f {{.PROJECT_DIR}}/manifests/applications/nginx-ingress-app.yaml
+      - kubectl apply -f {{.PROJECT_DIR}}/deployments/staging/platform/nginx-ingress.yaml
       - echo "Waiting for Nginx Ingress to be ready..." 
       - kubectl -n vela-system wait --for=condition=running --timeout=300s application/nginx-ingress
     vars:
@@ -116,10 +116,10 @@ tasks:
         echo "Latest Nginx Ingress chart version: $LATEST_VERSION"
         
         # Update the chart version in the application manifest
-        sed -i "s/version: \"[0-9.]*\"/version: \"$LATEST_VERSION\"/" {{.PROJECT_DIR}}/manifests/applications/nginx-ingress-app.yaml
+        sed -i "s/version: \"[0-9.]*\"/version: \"$LATEST_VERSION\"/" {{.PROJECT_DIR}}/examples/applications/nginx-ingress-app.yaml
         
         # Apply the updated manifest
-        kubectl apply -f {{.PROJECT_DIR}}/manifests/applications/nginx-ingress-app.yaml
+        kubectl apply -f {{.PROJECT_DIR}}/examples/applications/nginx-ingress-app.yaml
     vars:
       PROJECT_DIR:
         sh: git rev-parse --show-toplevel
@@ -128,7 +128,7 @@ tasks:
     desc: Uninstall Nginx Ingress Controller
     cmds:
       - echo "Removing Nginx Ingress Application..."
-      - kubectl delete -f {{.PROJECT_DIR}}/manifests/applications/nginx-ingress-app.yaml
+      - kubectl delete -f {{.PROJECT_DIR}}/examples/applications/nginx-ingress-app.yaml
     vars:
       PROJECT_DIR:
         sh: git rev-parse --show-toplevel
