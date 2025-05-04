@@ -108,6 +108,24 @@ tasks:
       - task: microk8s:setup
       - task: install-tools
       - task: install-k8s-components
+      - task: bootstrap-gitops
+      - |
+        echo "Installing KubeVela component definitions..."
+        kubectl apply -f manifests/components/gcp-provider.yaml || true
+        sleep 2
+        kubectl apply -f manifests/components/gke-component.yaml
+        kubectl apply -f manifests/components/postgresql-component.yaml
+        kubectl apply -f manifests/components/spring-boot-component.yaml
+        kubectl apply -f manifests/components/spring-app-with-db-component.yaml
+        kubectl apply -f manifests/traits/service-binding-trait.yaml || true
+        echo "Waiting for component definitions to be ready..."
+        sleep 5
+        echo "Setting up Flux kustomizations..."
+        kubectl apply -f manifests/flux/staging-kustomization.yaml
+        kubectl apply -f manifests/flux/production-kustomization.yaml
+        echo "Verifying component installations..."
+        kubectl get componentdefinition -A
+        echo "Bootstrap complete! Your GitOps control plane is ready."
     silent: false
 
   install-k8s-components:
