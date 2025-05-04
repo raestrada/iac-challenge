@@ -257,6 +257,127 @@ runnerPodTemplate:
               path: "credentials.json"
 ```
 
+## Multi-Level GitOps Architecture
+
+This project implements a sophisticated multi-level GitOps architecture that separates concerns between infrastructure layers and provides clear delegation of responsibilities:
+
+```mermaid
+graph TD
+    subgraph "Control Plane - MicroK8s"
+        CP_Flux["Flux CD"]  
+        CP_Tofu["Tofu-Controller"]
+        CP_KubeVela["KubeVela"]
+    end
+
+    subgraph "Core Infrastructure"
+        GKE_Staging["GKE Staging Cluster"]  
+        GKE_Prod["GKE Production Cluster"]
+    end
+
+    subgraph "GKE Clusters"
+        subgraph "Staging Cluster"
+            S_Flux["Flux CD"]  
+            S_Tofu["Tofu-Controller"]
+            S_KubeVela["KubeVela"]
+            S_Platform["Platform Services"]  
+            S_Apps["Applications"]
+        end
+
+        subgraph "Production Cluster"
+            P_Flux["Flux CD"]  
+            P_Tofu["Tofu-Controller"]
+            P_KubeVela["KubeVela"]
+            P_Platform["Platform Services"]  
+            P_Apps["Applications"]
+        end
+    end
+
+    GitRepository["Git Repository"]  
+
+    GitRepository --"GitOps"--> CP_Flux
+    CP_Flux --"Applies Core Manifests"--> CP_KubeVela
+    CP_KubeVela --"Generates Terraform"--> CP_Tofu
+    CP_Tofu --"Provisions"--> GKE_Staging
+    CP_Tofu --"Provisions"--> GKE_Prod
+
+    GitRepository --"GitOps"--> S_Flux
+    S_Flux --"Applies Platform Manifests"--> S_Platform
+    S_Flux --"Applies App Manifests"--> S_Apps
+    S_Platform --"Uses"--> S_Tofu
+    S_Apps --"Uses"--> S_KubeVela
+
+    GitRepository --"GitOps"--> P_Flux
+    P_Flux --"Applies Platform Manifests"--> P_Platform
+    P_Flux --"Applies App Manifests"--> P_Apps
+    P_Platform --"Uses"--> P_Tofu
+    P_Apps --"Uses"--> P_KubeVela
+```
+
+### Responsibility Layers
+
+1. **Control Plane (MicroK8s)**
+   - Responsible for core infrastructure only
+   - Provisions and manages GKE clusters
+   - Watches only `/deployments/core/*` manifests
+   - Uses Flux, KubeVela, and Tofu-Controller for GitOps automation
+
+2. **GKE Clusters (Staging/Production)**
+   - Each cluster runs its own Flux, KubeVela, and Tofu-Controller
+   - Self-managed through GitOps principles
+   - Each cluster has two main concerns:
+     - **Platform** (`/deployments/{env}/platform/*`) - Nginx Ingress, Observability, etc. 
+     - **Applications** (`/deployments/{env}/apps/*`) - Business applications
+
+### Directory Structure
+
+```
+├── clusters/                         # Cluster-specific Flux manifests
+│   ├── control-plane/                # MicroK8s control plane resources
+│   ├── staging/                      # Staging GKE cluster resources
+│   └── production/                   # Production GKE cluster resources
+│
+├── deployments/                      # Deployment manifests
+│   ├── core/                         # Core infrastructure (GKE clusters)
+│   ├── staging/                      # Staging environment
+│   │   ├── apps/                     # Application workloads
+│   │   └── platform/                 # Platform components (Ingress, Alloy)
+│   └── production/                   # Production environment
+│       ├── apps/                     # Application workloads
+│       └── platform/                 # Platform components (Ingress, Alloy)
+│
+└── manifests/                        # Component definitions
+    ├── components/                   # KubeVela component definitions
+    ├── traits/                       # KubeVela traits
+    └── flux/                         # Flux kustomization templates
+```
+
+### Bootstrapping Process
+
+1. **Control Plane Initialization**
+   - Sets up MicroK8s with Flux, KubeVela, and Tofu-Controller
+   - Creates GKE clusters through GitOps automation
+
+2. **GKE Cluster Bootstrapping**
+   - Once a GKE cluster is provisioned, it's bootstrapped with:
+   ```bash
+   task bootstrap-gke ENV=staging GCP_PROJECT_ID=your-project GCP_REGION=us-central1
+   ```
+   - This installs Flux, Tofu-Controller, and KubeVela on the GKE cluster
+   - Points Flux to the appropriate `clusters/{env}` directory
+   - Sets up proper credentials for GCP access
+
+3. **Automated Deployments**
+   - Platform components and applications are automatically deployed
+   - Changes to the Git repository trigger cascading reconciliations
+
+### Benefits of This Approach
+
+- **Clear Separation of Concerns** - Each layer has specific responsibilities
+- **Proper Delegation** - Control plane only manages core resources
+- **Self-Healing Clusters** - Each GKE cluster can recover independently
+- **Scalable Architecture** - Easy to add new environments or components
+- **GitOps Throughout** - Every change is declarative and version-controlled
+
 ## Managed Services
 
 The project leverages several managed services to enhance its capabilities:
