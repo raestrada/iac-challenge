@@ -41,16 +41,8 @@ jobs:
             echo "⚠️ This workflow was manually triggered - security scans may not have run"
           fi
       
-      - name: Set up JDK 17
-        uses: actions/setup-java@v3
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: maven
-      
-      - name: Build application with Maven
-        working-directory: ./app-example
-        run: ./mvnw clean package -DskipTests
+      # No need to set up JDK or build with Maven since the Dockerfile is multi-stage
+      # and handles the build process internally
       
       - name: Validate GCP variables
         id: validate-gcp
