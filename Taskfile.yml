@@ -71,6 +71,34 @@ tasks:
       - task: kubevela:install-cli
     silent: false
 
+  setup-env:
+    desc: Check for environment file and create if not exists
+    cmds:
+      - |
+        if [ ! -f .env ]; then
+          echo "Creating default .env file..."
+          cat > .env << 'EOT'
+        # Cluster Configuration
+        KUBE_CONTEXT=microk8s
+
+        # Flux Configuration
+        GITHUB_USER=change-me
+        GITHUB_TOKEN=change-me
+        GITHUB_REPO=iac-challenge
+
+        # GCP Configuration
+        GCP_PROJECT_ID=change-me
+        GCP_REGION=us-central1
+        GCP_ZONE=us-central1-a
+        GCP_CREDENTIALS_FILE=~/gcp-credentials.json
+        EOT
+          echo ".env file created. Please modify the values before proceeding."
+          exit 1
+        else
+          echo "Using existing .env file"
+        fi
+    silent: false
+
   bootstrap:
     desc: Bootstrap the entire environment
     deps: [install-task]
