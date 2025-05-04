@@ -100,6 +100,34 @@ Using Tofu-Controller within Kubernetes solves these problems by:
 
 4. **Resource Dependencies**: Define relationships between infrastructure components and applications through Kubernetes.
 
+## Managed Services Integration
+
+This project leverages several managed services to enhance monitoring, cost management, and code quality:
+
+### 1. Grafana Cloud
+
+Integrated for comprehensive monitoring of both infrastructure and applications:
+
+- **Metrics Monitoring**: Collects and visualizes performance metrics from the Kubernetes cluster and applications
+- **Logs Management**: Centralizes log collection and analysis from all components
+- **Distributed Tracing**: Tracks request flows across microservices
+
+### 2. SonarQube Cloud
+
+Implemented for continuous code quality and security analysis:
+
+- **Static Code Analysis**: Identifies code quality issues and bugs
+- **Security Vulnerability Detection**: Discovers potential security vulnerabilities
+- **Code Coverage Tracking**: Monitors test coverage over time
+
+### 3. Infracost
+
+Utilized for infrastructure cost optimization:
+
+- **Cost Estimation**: Provides cost estimates for infrastructure changes during CI/CD
+- **Cost Comparison**: Compares costs between different infrastructure configurations
+- **Budget Alerts**: Helps prevent unexpected cost increases
+
 5. **Multi-Cloud/Environment Management**: The control plane can manage resources in different environments (GCP, AWS, on-prem) from a single place.
 
 ## Modern and Maintainable Architecture
