@@ -1,17 +1,14 @@
 apiVersion: kustomize.toolkit.fluxcd.io/v1beta2
 kind: Kustomization
 metadata:
-  name: staging-platform
+  name: core-infrastructure
   namespace: flux-system
 spec:
   interval: 1m0s
-  path: ./deployments/staging/platform
+  path: ./deployments/core
   prune: true
   sourceRef:
     kind: GitRepository
     name: terraform-gcp
   # Disable health checks since we're not creating Deployments
   healthChecks: []
-  # Make sure platform is applied after core infrastructure
-  dependsOn:
-    - name: core-infrastructure

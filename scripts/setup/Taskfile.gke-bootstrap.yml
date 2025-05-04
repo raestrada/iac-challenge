@@ -1,0 +1,104 @@
+version: '3'
+
+tasks:
+  install:
+    desc: Bootstrap a GKE cluster with Flux, Tofu Controller, and KubeVela
+    cmds:
+      - echo "Connecting to GKE cluster..."
+      - |
+        # Get GKE credentials for the specified environment
+        if [ "{{.ENV}}" = "staging" ]; then
+          CLUSTER_NAME="iac-challenge-staging"
+        elif [ "{{.ENV}}" = "production" ]; then
+          CLUSTER_NAME="iac-challenge-production"
+        else
+          echo "Environment must be 'staging' or 'production'"
+          exit 1
+        fi
+        
+        gcloud container clusters get-credentials $CLUSTER_NAME \
+          --region {{.GCP_REGION}} \
+          --project {{.GCP_PROJECT_ID}}
+        
+        # Verify connection to GKE cluster
+        kubectl cluster-info
+        
+        # Create namespace for Flux
+        kubectl create namespace flux-system --dry-run=client -o yaml | kubectl apply -f -
+      
+      - echo "Installing Flux on GKE cluster..."
+      - |
+        # Install Flux on the GKE cluster
+        export KUBECONFIG=~/.kube/config
+        
+        # Bootstrap Flux with the specified repository
+        flux bootstrap github \
+          --owner=${GITHUB_ORG} \
+          --repository=${GITHUB_REPO} \
+          --branch=main \
+          --path=clusters/{{.ENV}} \
+          --personal \
+          --token-auth
+          
+        # Create GitRepository for the infrastructure repo
+        kubectl apply -f - <<EOF
+        apiVersion: source.toolkit.fluxcd.io/v1
+        kind: GitRepository
+        metadata:
+          name: terraform-gcp
+          namespace: flux-system
+        spec:
+          interval: 1m0s
+          url: https://github.com/${GITHUB_ORG}/${GITHUB_REPO}
+          ref:
+            branch: main
+          secretRef:
+            name: flux-system
+        EOF
+      
+      - echo "Installing Tofu Controller on GKE cluster..."
+      - |
+        # Install Tofu Controller on the GKE cluster
+        kubectl apply -f https://raw.githubusercontent.com/flux-iac/tofu-controller/main/manifests/install.yaml
+        
+        # Create Tofu Secret for GCP credentials
+        kubectl create secret generic gcp-credentials \
+          --namespace=flux-system \
+          --from-file=credentials.json=$HOME/.config/gcloud/application_default_credentials.json \
+          --dry-run=client -o yaml | kubectl apply -f -
+      
+      - echo "Installing KubeVela on GKE cluster..."
+      - |
+        # Install KubeVela CLI if not already installed
+        if ! command -v vela &> /dev/null; then
+          curl -fsSl https://kubevela.net/script/install.sh | bash -s {{.VELA_VERSION}}
+        fi
+        
+        # Install KubeVela on the GKE cluster
+        vela install --version {{.VELA_VERSION}}
+        
+        # Install Terraform addon for KubeVela
+        vela addon enable terraform
+        
+        # Deploy KubeVela component definitions
+        kubectl apply -f {{.ROOT_DIR}}/manifests/components/gke-component.yaml
+        kubectl apply -f {{.ROOT_DIR}}/manifests/components/postgresql-component.yaml
+        kubectl apply -f {{.ROOT_DIR}}/manifests/components/nginx-ingress-component.yaml
+        kubectl apply -f {{.ROOT_DIR}}/manifests/components/alloy-component.yaml
+        
+        # Deploy the GCP provider
+        kubectl apply -f {{.ROOT_DIR}}/manifests/components/gcp-provider.yaml
+      
+      - echo "Deploying Flux kustomizations for {{.ENV}}..."
+      - |
+        # Apply the Flux kustomizations for platform and apps
+        kubectl apply -f {{.ROOT_DIR}}/manifests/flux/{{.ENV}}-platform-kustomization.yaml
+        kubectl apply -f {{.ROOT_DIR}}/manifests/flux/{{.ENV}}-kustomization.yaml
+      
+      - echo "GKE cluster '{{.ENV}}' successfully bootstrapped with Flux, Tofu Controller, and KubeVela!"
+    vars:
+      ENV: '{{.ENV | default "staging"}}'
+      GCP_REGION: '{{.GCP_REGION | default "us-central1"}}'
+      GCP_PROJECT_ID: '{{.GCP_PROJECT_ID}}'
+      ROOT_DIR: '{{.ROOT_DIR | default "."}}'
+      VELA_VERSION: '{{.VELA_VERSION}}'

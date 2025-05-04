@@ -32,6 +32,10 @@ includes:
   nginx-ingress:
     taskfile: ./scripts/setup/Taskfile.nginx-ingress.yml
     dir: .
+  gke-bootstrap:
+    taskfile: ./scripts/setup/Taskfile.gke-bootstrap.yml
+    vars:
+      VELA_VERSION: '{{.VELA_VERSION}}'
 
 tasks:
   install-task:
@@ -189,6 +193,17 @@ tasks:
     cmds:
       - task: nginx-ingress:install
       - task: nginx-ingress:get-ingress-ip
+
+  bootstrap-gke:
+    desc: Bootstrap a GKE cluster with Flux, Tofu Controller, and KubeVela
+    cmds:
+      - task: gke-bootstrap:install
+        vars:
+          ENV: '{{.ENV}}'
+          GCP_PROJECT_ID: '{{.GCP_PROJECT_ID}}'
+          GCP_REGION: '{{.GCP_REGION}}'
+          ROOT_DIR: '{{.ROOT_DIR | default "."}}'
+    interactive: true
     silent: false
 
   bootstrap-flux-gitops:

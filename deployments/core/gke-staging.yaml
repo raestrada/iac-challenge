@@ -1,0 +1,21 @@
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: staging-gke-cluster
+  namespace: default
+spec:
+  components:
+    - name: staging-gke
+      type: terraform-gke
+      properties:
+        name: iac-challenge-staging
+        size: small
+        project_id: "${GCP_PROJECT_ID}"
+        region: "${GCP_REGION}"
+  
+  workflow:
+    steps:
+      - name: deploy-staging-gke
+        type: apply-component
+        properties:
+          component: staging-gke
