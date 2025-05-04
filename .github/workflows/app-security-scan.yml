@@ -86,13 +86,6 @@ jobs:
           severity: 'CRITICAL,HIGH'
         continue-on-error: true
           
-      # Upload Trivy scan results to GitHub Security tab
-      - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: 'trivy-results.sarif'
-          category: 'code-scan'
-          
       # Docker image scanning for the built image
       - name: Run Trivy vulnerability scanner in Docker mode
         uses: aquasecurity/trivy-action@0.12.0
