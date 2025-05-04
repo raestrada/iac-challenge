@@ -58,10 +58,11 @@ jobs:
       
       # Upload OWASP Dependency Check report
       - name: Upload OWASP Dependency Check Report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: dependency-check-report
           path: app-example/target/dependency-check-report.html
+          retention-days: 5
           
       # Scan for hardcoded secrets
       - name: TruffleHog OSS
