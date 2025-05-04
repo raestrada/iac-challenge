@@ -1,5 +1,10 @@
 # Infrastructure as Code Challenge - Control Plane Architecture with KubeVela and Tofu-Controller
 
+[![App Security Scanning](https://github.com/raestrada/iac-challenge/actions/workflows/app-security-scan.yml/badge.svg)](https://github.com/raestrada/iac-challenge/actions/workflows/app-security-scan.yml)
+[![Build and Push App](https://github.com/raestrada/iac-challenge/actions/workflows/build-push-app.yml/badge.svg)](https://github.com/raestrada/iac-challenge/actions/workflows/build-push-app.yml)
+[![Kubernetes Manifests CI](https://github.com/raestrada/iac-challenge/actions/workflows/k8s-manifests-ci.yml/badge.svg)](https://github.com/raestrada/iac-challenge/actions/workflows/k8s-manifests-ci.yml)
+[![Terraform CI](https://github.com/raestrada/iac-challenge/actions/workflows/terraform-ci.yml/badge.svg)](https://github.com/raestrada/iac-challenge/actions/workflows/terraform-ci.yml)
+
 > 📑 **Security & Cost Optimization**: View our detailed analysis on [cloud security and cost optimization strategies](docs/security-cost-optimization.md) for production environments.
 > 
 > 🔧 **CI/CD Workflows**: Explore our [automated CI/CD workflows](docs/ci-cd-workflows.md) for application, infrastructure, and manifest validation.
