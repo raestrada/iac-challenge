@@ -1,4 +1,6 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - spring-person-api.yaml
+  - gke-staging.yaml
+  - nginx-ingress.yaml
+  - alloy.yaml

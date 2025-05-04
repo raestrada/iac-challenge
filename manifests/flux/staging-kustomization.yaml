@@ -5,10 +5,13 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1m0s
-  path: ./deployments/staging
+  path: ./deployments/staging/apps
   prune: true
   sourceRef:
     kind: GitRepository
     name: terraform-gcp
   # Disable health checks since we're not creating Deployments
   healthChecks: []
+  # Make sure platform is applied before applications
+  dependsOn:
+    - name: staging-platform
