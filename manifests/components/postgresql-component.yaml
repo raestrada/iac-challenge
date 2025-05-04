@@ -75,15 +75,18 @@ spec:
 
   status:
     customStatus: |
-      if databaseReady {
+      message: ""
+      status: ""
+      if context.outputs.status == "succeeded" {
         message: "PostgreSQL database is ready"
         status: "Ready"
-      } else {
-        message: "PostgreSQL database is not ready yet"
+      }
+      if context.outputs.status == "progressing" {
+        message: "PostgreSQL database is being provisioned"
         status: "Creating"
       }
-      if errorExists {
-        message: errorMessage
+      if context.outputs.status == "failed" {
+        message: "PostgreSQL database provisioning failed"
         status: "Error"
       }
     healthPolicy: |

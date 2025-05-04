@@ -74,15 +74,18 @@ spec:
         }
   status:
     customStatus: |
-      if clusterReady {
+      message: ""
+      status: ""
+      if context.outputs.status == "succeeded" {
         message: "GKE cluster is ready"
         status: "Ready"
-      } else {
-        message: "GKE cluster is not ready yet"
+      }
+      if context.outputs.status == "progressing" {
+        message: "GKE cluster is being provisioned"
         status: "Creating"
       }
-      if errorExists {
-        message: errorMessage
+      if context.outputs.status == "failed" {
+        message: "GKE cluster provisioning failed"
         status: "Error"
       }
     healthPolicy: |
