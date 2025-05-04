@@ -11,7 +11,8 @@ on:
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  GCR_REPOSITORY: gcr.io/${{ secrets.GCP_PROJECT_ID }}
+  # Using Artifact Registry instead of Container Registry
+  AR_REPOSITORY: ${{ format('{0}-docker.pkg.dev/{1}/spring-apps', secrets.GCP_REGION || 'us-central1', secrets.GCP_PROJECT_ID) }}
   IMAGE_NAME: spring-person-api
   
 jobs:
@@ -51,6 +52,19 @@ jobs:
         working-directory: ./app-example
         run: ./mvnw clean package -DskipTests
       
+      - name: Validate GCP variables
+        id: validate-gcp
+        run: |
+          if [ -z "${{ secrets.GCP_PROJECT_ID }}" ]; then
+            echo "::error::GCP_PROJECT_ID secret is not set! Please add it to your repository secrets."
+            exit 1
+          fi
+          if [ -z "${{ secrets.GCP_SA_KEY }}" ]; then
+            echo "::error::GCP_SA_KEY secret is not set! Please add it to your repository secrets."
+            exit 1
+          fi
+          echo "All required GCP variables are set"
+      
       - name: Setup Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
         with:
@@ -58,8 +72,8 @@ jobs:
           service_account_key: ${{ secrets.GCP_SA_KEY }}
           export_default_credentials: true
       
-      - name: Configure Docker for GCR
-        run: gcloud auth configure-docker gcr.io
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ contains(env.AR_REPOSITORY, '-docker.pkg.dev') && env.AR_REPOSITORY || 'us-central1-docker.pkg.dev' }}
       
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
@@ -73,14 +87,15 @@ jobs:
         run: echo "timestamp=$(date +'%Y%m%d%H%M%S')" >> $GITHUB_OUTPUT
       
       - name: Build and push Docker image
+        id: build-push
         uses: docker/build-push-action@v4
         with:
           context: ./app-example
           push: true
           tags: |
-            ${{ env.GCR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest
-            ${{ env.GCR_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.sha_short }}
-            ${{ env.GCR_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ steps.timestamp.outputs.timestamp }}
+            ${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.sha_short }}
+            ${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ steps.timestamp.outputs.timestamp }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
       
@@ -90,5 +105,5 @@ jobs:
       - name: Notify build complete
         if: success()
         run: |
-          echo "✅ Successfully built and pushed image: ${{ env.GCR_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.sha_short }}"
+          echo "✅ Successfully built and pushed image: ${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.sha_short }}"
           echo "📝 You can use this image reference in your Kubernetes manifests"
