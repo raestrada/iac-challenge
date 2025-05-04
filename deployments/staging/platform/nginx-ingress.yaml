@@ -1,0 +1,14 @@
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: staging-nginx-ingress
+  namespace: default
+spec:
+  components:
+    - name: nginx-ingress
+      type: terraform-nginx-ingress
+      properties:
+        name: staging-nginx-ingress
+        environment: "staging"
+        region: "${GCP_REGION}"
+        loadBalancerType: "External"

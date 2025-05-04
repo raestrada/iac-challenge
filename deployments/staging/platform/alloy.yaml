@@ -1,0 +1,14 @@
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: staging-alloy
+  namespace: default
+spec:
+  components:
+    - name: alloy
+      type: terraform-alloy
+      properties:
+        name: staging-alloy
+        environment: "staging"
+        grafanaApiKey: "${GRAFANA_API_KEY}"
+        grafanaEndpoint: "https://grafana.lukalibre.com"

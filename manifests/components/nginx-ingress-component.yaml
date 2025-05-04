@@ -1,0 +1,89 @@
+apiVersion: core.oam.dev/v1beta1
+kind: ComponentDefinition
+metadata:
+  name: terraform-nginx-ingress
+  namespace: vela-system
+  annotations:
+    definition.oam.dev/description: "Nginx Ingress Controller for Kubernetes"
+spec:
+  workload:
+    definition:
+      apiVersion: infra.contrib.fluxcd.io/v1alpha2
+      kind: Terraform
+  schematic:
+    cue:
+      template: |
+        output: {
+          apiVersion: "infra.contrib.fluxcd.io/v1alpha2"
+          kind:       "Terraform"
+          metadata: {
+            name: context.name
+          }
+          spec: {
+            path: "./nginx-ingress"
+            
+            // Reference to the GCP provider credentials
+            providerRef: {
+              name: "gcp-provider"
+            }
+            
+            // Write connection info to a Kubernetes Secret
+            writeOutputsToSecret: {
+              name: "{{ context.name }}-conn"
+            }
+            
+            // Use Helm instead of direct TF
+            approvePlan: "auto"
+            interval: "10m"
+            sourceRef: {
+              kind: "GitRepository"
+              name: "terraform-gcp"
+            }
+            
+            // Values define the parameters
+            vars: [
+              {
+                name: "name"
+                value: parameter.name
+              },
+              {
+                name: "environment"
+                value: parameter.environment
+              },
+              {
+                name: "region"
+                value: parameter.region
+              },
+              {
+                name: "load_balancer_type"
+                value: parameter.loadBalancerType
+              }
+            ]
+          }
+        }
+
+        parameter: {
+          // Required parameters
+          name: string
+          environment: *"staging" | "production"
+          region: *"us-central1" | string
+          loadBalancerType: *"External" | "Internal"
+        }
+  status:
+    customStatus: |
+      message: ""
+      status: ""
+      if context.outputs.status == "succeeded" {
+        message: "Nginx Ingress is ready"
+        status: "Ready"
+      }
+      if context.outputs.status == "progressing" {
+        message: "Nginx Ingress is being provisioned"
+        status: "Creating"
+      }
+      if context.outputs.status == "failed" {
+        message: "Nginx Ingress provisioning failed"
+        status: "Error"
+      }
+    healthPolicy: |
+      isHealth: context.output.status == "Ready"
