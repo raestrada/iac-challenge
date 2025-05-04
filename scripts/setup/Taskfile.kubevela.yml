@@ -29,6 +29,19 @@ tasks:
         echo "KubeVela installed successfully!"
     silent: false
 
+  enable-terraform-addon:
+    desc: Enable Terraform addon for KubeVela
+    deps: [install]
+    cmds:
+      - |
+        echo "Enabling Terraform addon for KubeVela..."
+        vela addon enable terraform
+        echo "Waiting for Terraform addon to be ready..."
+        sleep 5
+        kubectl get crd providers.terraform.core.oam.dev
+        echo "Terraform addon enabled successfully!"
+    silent: false
+
   enable-velaux:
     desc: Enable VelaUX UI component
     deps: [install]
