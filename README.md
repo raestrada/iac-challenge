@@ -5,6 +5,10 @@
 [![Kubernetes Manifests CI](https://github.com/raestrada/iac-challenge/actions/workflows/k8s-manifests-ci.yml/badge.svg)](https://github.com/raestrada/iac-challenge/actions/workflows/k8s-manifests-ci.yml)
 [![Terraform CI](https://github.com/raestrada/iac-challenge/actions/workflows/terraform-ci.yml/badge.svg)](https://github.com/raestrada/iac-challenge/actions/workflows/terraform-ci.yml)
 
+## Modern Production-Grade GitOps Control Plane
+
+This project implements a production-ready control plane for managing infrastructure and applications on Google Cloud Platform (GCP) using KubeVela, Tofu-Controller, and Flux CD. The solution follows GitOps principles, emphasizing declarative configurations, version control, and automated reconciliation.
+
 > 📑 **Security & Cost Optimization**: View our detailed analysis on [cloud security and cost optimization strategies](docs/security-cost-optimization.md) for production environments.
 > 
 > 🔧 **CI/CD Workflows**: Explore our [automated CI/CD workflows](docs/ci-cd-workflows.md) for application, infrastructure, and manifest validation.
@@ -14,6 +18,57 @@
 > 🚀 **GKE Ingress**: Deploy [Nginx Ingress Controller on GKE](docs/nginx-ingress-gke.md) with our optimized KubeVela manifests and Taskfiles.
 > 
 > 🤖 **AI Assistance**: Read about how [AI was used in this project](docs/ai-assistance.md) while maintaining human-directed architecture and implementation.
+
+## Key Features
+
+- **GitOps-Powered Infrastructure & Applications**: Everything is defined as code in Git and automatically reconciled
+- **Highly Modular Architecture**: Well-separated components with clear interfaces between them
+- **Comprehensive CI/CD**: Automated testing, security scanning, and deployment pipelines
+- **Security-First Approach**: OWASP dependency checks, Trivy scanning, TruffleHog secret detection, and more
+- **Managed Services Integration**: Grafana Cloud for monitoring, SonarQube Cloud for code quality, Infracost for cost optimization
+- **Google Cloud Integration**: GKE, Cloud SQL, Artifact Registry, and IAM properly configured
+
+## CI/CD Workflows
+
+This project uses GitHub Actions for robust CI/CD pipeline implementation:
+
+### 1. Application Security Scanning
+- **Workflow**: [app-security-scan.yml](/.github/workflows/app-security-scan.yml)
+- **Purpose**: Comprehensive security scanning of Spring Boot application
+- **Tools**: 
+  - OWASP Dependency Check for vulnerable dependencies
+  - SpotBugs for static code analysis
+  - Trivy for vulnerability scanning
+  - SonarQube for code quality (optional via GitHub variables)
+- **Triggers**: On push to main, pull requests, weekly schedule, or manual trigger
+
+### 2. Application Build & Deploy
+- **Workflow**: [build-push-app.yml](/.github/workflows/build-push-app.yml)
+- **Purpose**: Build and publish Docker image to Google Artifact Registry
+- **Implementation**: 
+  - Uses multi-stage Dockerfile for efficient builds
+  - Authenticates with Google Cloud
+  - Creates Artifact Registry repository if needed
+  - Tags images with commit SHA and timestamp
+- **Triggers**: After successful security scanning or manual trigger
+
+### 3. Kubernetes Manifests Validation
+- **Workflow**: [k8s-manifests-ci.yml](/.github/workflows/k8s-manifests-ci.yml)
+- **Purpose**: Validate Kubernetes/KubeVela manifests
+- **Tools**:
+  - yamllint for YAML syntax validation
+  - Kubeconform for schema validation
+  - Kube-linter for best practices
+- **Triggers**: Changes to manifest files, pull requests, or manual trigger
+
+### 4. Terraform/OpenTofu Validation
+- **Workflow**: [terraform-ci.yml](/.github/workflows/terraform-ci.yml)
+- **Purpose**: Validate infrastructure code and estimate costs
+- **Tools**:
+  - Terraform validation
+  - TFLint for linting
+  - Infracost for cost estimation
+- **Triggers**: Changes to tf-controller directory, pull requests, or manual trigger
 
 ![architecture](https://miro.medium.com/v2/resize:fit:1400/0*UF_t_MBXZ-wq0Z3t)
 
