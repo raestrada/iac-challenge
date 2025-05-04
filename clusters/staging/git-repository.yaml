@@ -1,0 +1,12 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: terraform-gcp
+  namespace: flux-system
+spec:
+  interval: 1m0s
+  url: https://github.com/${GITHUB_ORG}/${GITHUB_REPO}
+  ref:
+    branch: main
+  secretRef:
+    name: flux-system
