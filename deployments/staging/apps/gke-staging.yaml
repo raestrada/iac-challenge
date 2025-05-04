@@ -19,16 +19,3 @@ spec:
         type: apply-component
         properties:
           component: staging-gke
-      
-      - name: check-staging-gke-ready
-        type: wait
-        properties:
-          continue: true
-          timeout: 1200s
-          resources:
-            - apiVersion: infra.contrib.fluxcd.io/v1alpha2
-              kind: Terraform
-              name: staging-gke
-          conditions:
-            - status: running
-              reason: TerraformAppliedCompleted
