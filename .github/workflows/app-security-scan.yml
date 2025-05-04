@@ -15,9 +15,7 @@ on:
     - cron: '0 0 * * 0'  # Weekly run on Sunday at midnight
   workflow_dispatch: # Allow manual triggering
 
-# This output is used by the build-push workflow to determine if it should proceed
-outputs:
-  security_status: ${{ jobs.security-scan.outputs.security_status }}
+# This workflow is used by the build-push workflow to determine if it should proceed
 
 jobs:
   security-scan:
@@ -106,7 +104,7 @@ jobs:
         
       # SonarQube scan (optional - requires SonarQube instance)
       - name: SonarQube Scan
-        if: ${{ secrets.SONAR_TOKEN != '' }}
+        if: ${{ vars.ENABLE_SONAR == 'true' }}
         working-directory: ./app-example
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -114,7 +112,7 @@ jobs:
         run: |
           ./mvnw sonar:sonar \
             -Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }} \
-            -Dsonar.host.url=${{ secrets.SONAR_HOST_URL || 'https://sonarcloud.io' }}
+            -Dsonar.host.url=${{ vars.SONAR_HOST_URL || 'https://sonarcloud.io' }}
         continue-on-error: true
         
       # Set security status output for other workflows
