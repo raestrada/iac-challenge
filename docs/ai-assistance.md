@@ -1,6 +1,6 @@
 # AI Assistance in this Project
 
-This document explains how AI assistance tools were used in the development of this infrastructure as code project, detailing the collaborative process between human expertise and AI capabilities.
+This document explains how AI assistance tools were used in the development of this IDP Control Plane Lab project, detailing the collaborative process between human expertise and AI capabilities.
 
 ## AI Tools Used
 

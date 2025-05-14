@@ -8,9 +8,9 @@ tasks:
       - |
         # Get GKE credentials for the specified environment
         if [ "{{.ENV}}" = "staging" ]; then
-          CLUSTER_NAME="iac-challenge-staging"
+          CLUSTER_NAME="idp-control-plane-lab-staging"
         elif [ "{{.ENV}}" = "production" ]; then
-          CLUSTER_NAME="iac-challenge-production"
+          CLUSTER_NAME="idp-control-plane-lab-production"
         else
           echo "Environment must be 'staging' or 'production'"
           exit 1

@@ -1,6 +1,6 @@
 # Setup Scripts Documentation
 
-This directory contains automation scripts for setting up the development and deployment environment for the IAC Challenge project.
+This directory contains automation scripts for setting up the development and deployment environment for the IDP Control Plane Lab project.
 
 ## Prerequisites
 

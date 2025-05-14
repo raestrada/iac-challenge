@@ -88,7 +88,7 @@ tasks:
         # Flux Configuration
         GITHUB_USER=change-me
         GITHUB_TOKEN=change-me
-        GITHUB_REPO=iac-challenge
+        GITHUB_REPO=idp-control-plane-lab
 
         # GCP Configuration
         GCP_PROJECT_ID=change-me

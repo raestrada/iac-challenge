@@ -1,9 +1,9 @@
-# Infrastructure as Code Challenge - Control Plane Architecture with KubeVela and Tofu-Controller
+# IDP Control Plane Lab - Modern Control Plane Architecture with KubeVela and Tofu-Controller
 
-[![App Security Scanning](https://github.com/raestrada/iac-challenge/actions/workflows/app-security-scan.yml/badge.svg)](https://github.com/raestrada/iac-challenge/actions/workflows/app-security-scan.yml)
-[![Build and Push App](https://github.com/raestrada/iac-challenge/actions/workflows/build-push-app.yml/badge.svg)](https://github.com/raestrada/iac-challenge/actions/workflows/build-push-app.yml)
-[![Kubernetes Manifests CI](https://github.com/raestrada/iac-challenge/actions/workflows/k8s-manifests-ci.yml/badge.svg)](https://github.com/raestrada/iac-challenge/actions/workflows/k8s-manifests-ci.yml)
-[![Terraform CI](https://github.com/raestrada/iac-challenge/actions/workflows/terraform-ci.yml/badge.svg)](https://github.com/raestrada/iac-challenge/actions/workflows/terraform-ci.yml)
+[![App Security Scanning](https://github.com/raestrada/idp-control-plane-lab/actions/workflows/app-security-scan.yml/badge.svg)](https://github.com/raestrada/idp-control-plane-lab/actions/workflows/app-security-scan.yml)
+[![Build and Push App](https://github.com/raestrada/idp-control-plane-lab/actions/workflows/build-push-app.yml/badge.svg)](https://github.com/raestrada/idp-control-plane-lab/actions/workflows/build-push-app.yml)
+[![Kubernetes Manifests CI](https://github.com/raestrada/idp-control-plane-lab/actions/workflows/k8s-manifests-ci.yml/badge.svg)](https://github.com/raestrada/idp-control-plane-lab/actions/workflows/k8s-manifests-ci.yml)
+[![Terraform CI](https://github.com/raestrada/idp-control-plane-lab/actions/workflows/terraform-ci.yml/badge.svg)](https://github.com/raestrada/idp-control-plane-lab/actions/workflows/terraform-ci.yml)
 
 ## Modern Production-Grade GitOps Control Plane
 

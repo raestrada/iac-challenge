@@ -1,6 +1,6 @@
 # CI/CD Workflows Documentation
 
-This document outlines the CI/CD workflows implemented for the KubeVela GitOps Control Plane project. These workflows enable automated testing, security scanning, and deployment of all components in the solution.
+This document outlines the CI/CD workflows implemented for the IDP Control Plane Lab project. These workflows enable automated testing, security scanning, and deployment of all components in the solution.
 
 ## Overview
 

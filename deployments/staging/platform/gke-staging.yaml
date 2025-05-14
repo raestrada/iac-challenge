@@ -8,7 +8,7 @@ spec:
     - name: staging-gke
       type: terraform-gke
       properties:
-        name: iac-challenge-staging
+        name: idp-control-plane-lab-staging
         size: small
         project_id: "${GCP_PROJECT_ID}"
         region: "${GCP_REGION}"
